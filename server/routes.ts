@@ -16,13 +16,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Upload Google Service Account credentials
   app.post('/api/credentials', upload.single('credentials'), async (req: MulterRequest, res) => {
+    let filePath: string | undefined;
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No credentials file uploaded' });
       }
 
+      filePath = req.file.path;
       const fs = await import('fs');
-      const credentialsJson = JSON.parse(fs.readFileSync(req.file.path, 'utf8'));
+      const credentialsJson = JSON.parse(fs.readFileSync(filePath, 'utf8'));
       
       // Validate credentials structure
       const requiredFields = ['type', 'project_id', 'private_key', 'client_email'];
@@ -40,10 +42,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const credentials = await storage.createCredentials(result.data);
       
       // Clean up uploaded file
-      fs.unlinkSync(req.file.path);
+      fs.unlinkSync(filePath);
+      filePath = undefined;
       
       res.json({ success: true, id: credentials.id });
     } catch (error) {
+      // Clean up file on error
+      if (filePath) {
+        try {
+          const fs = await import('fs');
+          fs.unlinkSync(filePath);
+        } catch (cleanupError) {
+          console.error('Failed to cleanup temp file:', cleanupError);
+        }
+      }
       res.status(500).json({ error: 'Failed to upload credentials' });
     }
   });
