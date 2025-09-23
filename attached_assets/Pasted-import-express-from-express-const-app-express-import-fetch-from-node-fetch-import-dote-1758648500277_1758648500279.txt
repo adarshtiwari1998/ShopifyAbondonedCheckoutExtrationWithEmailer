@@ -1,0 +1,190 @@
+import express from "express";
+const app = express();
+import fetch from 'node-fetch';
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const options = {
+  method: 'GET',
+  headers: {
+    'X-Shopify-Access-Token': process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
+    'Content-Type': 'application/json'
+  }
+};
+
+async function fetchAbandonedCheckouts(url, options, totalCheckouts = []) {
+  try {
+    const response = await fetch(url, options);
+    const data = await response.json();
+    const checkouts = data.checkouts || [];
+    totalCheckouts = totalCheckouts.concat(checkouts);
+    if (checkouts.length === 100 && totalCheckouts.length < 1000) {
+      // If there are more checkouts and we haven't reached 400 yet, fetch the next page
+      const nextPageUrl = getNextPageUrl(response.headers.get('link'));
+      if (nextPageUrl) {
+        return fetchAbandonedCheckouts(nextPageUrl, options, totalCheckouts);
+      }
+    }
+    return totalCheckouts;
+  } catch (error) {
+    throw error;
+  }
+}
+
+function getNextPageUrl(linkHeader) {
+  if (!linkHeader) return null;
+  const links = linkHeader.split(',');
+  for (let link of links) {
+    const [url, rel] = link.split(';');
+    if (rel.includes('next')) {
+      return url.trim().slice(1, -1); // Remove surrounding angle brackets
+    }
+  }
+  return null;
+}
+
+app.get('/', async (req, res) => {
+  try {
+    const baseUrl = 'https://shopfls.myshopify.com/admin/api/2024-04/checkouts.json?created_at_min=2025-09-01T00:00:00Z&created_at_max=2025-09-31T23:59:59Z&limit=100';
+    const abandonedCheckouts = await fetchAbandonedCheckouts(baseUrl, options);
+    // Construct HTML response
+    const abandonedCheckoutsCount = abandonedCheckouts.length;
+    let htmlResponse = '<!DOCTYPE html><html><head><title>Abandoned Checkouts</title></head><body>';
+    htmlResponse += '<h1>Abandoned Checkouts for Aug 2025</h1>';
+    htmlResponse += `<p>Total Abandoned Checkouts: <span>${abandonedCheckoutsCount}</span></p>`;
+    htmlResponse += ``
+    htmlResponse += '<ul>';
+    abandonedCheckouts.forEach(checkout => {
+      htmlResponse += `<li>ID: ${checkout.id}, Date: ${checkout.updated_at}, Email: ${checkout.email}, Total Price: ${checkout.total_price}, Checkout URL: <a href="${checkout.abandoned_checkout_url}">Checkout Now</a>`;
+      if (checkout.customer) {
+        htmlResponse += `, Customer: ${checkout.customer.email}, ${checkout.customer.first_name} ${checkout.customer.last_name}`;
+      }
+        if (checkout.shipping_lines && checkout.shipping_lines.length > 0) {
+          htmlResponse += `<br>Shipping Lines: <ul>`;
+          checkout.shipping_lines.forEach(shippingLine => {
+            htmlResponse += `<li>${shippingLine.title}: ${shippingLine.price}</li>`;
+          });
+          htmlResponse += `</ul>`;
+        }
+        if (checkout.tax_lines && checkout.tax_lines.length > 0) {
+          htmlResponse += `<br>Tax Lines: <ul>`;
+          checkout.tax_lines.forEach(taxLine => {
+            htmlResponse += `<li>${taxLine.title}: ${taxLine.price}</li>`;
+          });
+          htmlResponse += `</ul>`;
+        }
+        if (checkout.shipping_address) {
+          htmlResponse += `<br>Shipping Address: ${checkout.shipping_address.address1}, ${checkout.shipping_address.city}, ${checkout.shipping_address.country}`;
+        }
+        if (checkout.billing_address) {
+          htmlResponse += `<br>Billing Address: ${checkout.billing_address.address1}, ${checkout.billing_address.city}, ${checkout.billing_address.country}`;
+        }
+        if (checkout.line_items && checkout.line_items.length > 0) {
+          htmlResponse += `<br>Line Items: <ul>`;
+          checkout.line_items.forEach(lineItem => {
+            htmlResponse += `<li>Title: ${lineItem.title}, Variant Id: ${lineItem.variant_id}, Price: ${lineItem.price}, Compare Price: ${lineItem.compare_at_price}, Quantity: ${lineItem.quantity}, Vendor: ${lineItem.vendor}</li>`;
+          });
+          htmlResponse += `</ul>`;
+        }
+      // Add more details as needed
+      htmlResponse += `</li>`;
+    });
+    htmlResponse += '</ul>';
+    htmlResponse += '</body></html>';
+    // Send HTML response
+    res.send(htmlResponse);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Error fetching abandoned checkouts');
+  }
+});
+
+function getEmailHeader() {
+  const companyHeaderInfo = {
+      name: 'Foxx Life Sciences',
+      link: 'https://foxxlifesciences.com/',
+      logo: 'https://www.foxxlifesciences.com/cdn/shop/t/37/assets/logo.png?v=149756107581828300611700623519'
+  };
+  const previewMessage = 'Hello team! Here is the Weekly order data for the Foxx Life Sciences Global Website.';
+  return `
+      <div style="text-align: center;">
+          <div style="display: inline-block; text-align: center;">
+              <p>
+                  <a href="${companyHeaderInfo.link}" style="color:#2a2a2a" target="_blank" title="Visit Website">
+                      <img src="${companyHeaderInfo.logo}" alt="${companyHeaderInfo.name}" style="max-width: 150px;">
+                  </a>
+              </p>
+              <p style="font-size: 16px; color: #666;">${previewMessage}</p>
+          </div>
+      </div>
+      <hr />
+  `;
+}
+
+function getEmailFooter() {
+  const companyInfo = {
+    name: 'Foxx Life Sciences',
+    link: 'https://foxxlifesciences.com/',
+    logo: 'https://www.foxxlifesciences.com/cdn/shop/t/37/assets/logo.png?v=149756107581828300611700623519'
+  };
+
+  return `
+      <hr />
+      <div style="text-align: center;">
+      <div style="display: inline-block; text-align: left;">
+        <p>
+        <a href="${companyInfo.link}" style="color:#2a2a2a" target="_blank" title="Visit Website">
+        <img src="${companyInfo.logo}" alt="${companyInfo.name}" style="max-width: 150px;">
+        </a>
+        </p>
+        <p>
+          <a href="mailto:sales@foxxlifesciences.com" target="_blank" style="color:#2a2a2a" title="sales@foxxlifesciences.com">
+          <img src="https://cdn.shopify.com/s/files/1/1064/0118/files/mail-icon-emailer-footer-pittcoin-2024.png?v=1708183644" style="height:12px;max-height:12px;" alt="Email us"/>
+            sales@foxxlifesciences.com
+          </a>
+        </p>
+        <p>
+        <a href="tel:(603) 890-FOXX (3699)" target="_blank" style="color:#2a2a2a" title="sales@foxxlifesciences.com">
+        <img src="https://cdn.shopify.com/s/files/1/1064/0118/files/phone-icon-emailer-footer-pittcoin-2024.png?v=1708183725" style="height:12px;max-height:12px;" alt="Call us"/>
+        (603) 890-FOXX (3699)
+        </a>
+      </p>
+      </div>
+      <div style="display: inline-block; vertical-align: top;">
+        <p>
+        <p>Follow us on</p>
+          <a href="https://www.linkedin.com/company/foxxlifesciences/" target="_blank" title="Follow us on Linkedin" style="color:#2a2a2a;text-decoration:none">
+          <img src="https://cdn.shopify.com/s/files/1/1064/0118/files/linkedin-icon-emailer-footer-pittcoin-2024.png?v=1708183933" alt="Follow us on Linkedin" title="Follow us on Linkedin"/>
+          </a>
+          <a href="https://twitter.com/foxxlifescience" target="_blank" title="Follow us on Twitter" style="color:#2a2a2a;text-decoration:none">
+          <img src="https://cdn.shopify.com/s/files/1/1064/0118/files/twitter-icon-emailer-footer-pittcoin-2024.png?v=1708184777" style="height:20px;max-height:20px;"  alt="Follow us on Twitter" title="Follow us on Twitter"/>
+          </a>
+          <a href="https://www.facebook.com/foxxlifesciences/" target="_blank" title="Follow us on Facebook" style="color:#2a2a2a;text-decoration:none">
+          <img src="https://cdn.shopify.com/s/files/1/1064/0118/files/facebook-icon-emailer-footer-pittcoin-2024.png?v=1708184234" alt="Follow us on Facebook" title="Follow us on Facebook"/>
+          </a>
+          <a href="https://www.youtube.com/user/foxxlifesciences" target="_blank" title="Follow us on Youtube" style="color:#2a2a2a;text-decoration:none">
+          <img src="https://cdn.shopify.com/s/files/1/1064/0118/files/youtube-icon-v2-emailer-footer-pittcoin-2024.png?v=1708184409" alt="Follow us on Youtube" title="Follow us on Youtube"/>
+          </a>
+        </p>
+      </div>
+    </div>
+    <div style="text-align: center;">
+        <hr style="width:100%"/>
+      <p>&copy; ${new Date().getFullYear()} Foxx Life Sciences | <a href="${companyInfo.link}" style="color:#2a2a2a;text-decoration:none" target="_blank" title="Visit Website">
+      <img src="https://cdn.shopify.com/s/files/1/1064/0118/files/website-icon-emailer-footer-pittcoin-2024.png?v=1708185028" style="height:12px;max-height:12px;" alt="Visit Website" title="Visit Website" /> 
+        Visit Website</a> |
+        <a href="https://www.foxxlifesciences.com/pages/terms" style="color:#2a2a2a;text-decoration:none" target="_blank" title="Terms & Conditions">Terms & Conditions</a>
+      </p>
+      <p>Company Address: <a href="https://www.google.com/maps/place/Foxx+Life+Sciences/@42.9105949,-71.4278983,17z/data=!3m1!4b1!4m6!3m5!1s0x89e24da9647cfcbb:0x20dde88a32fe7afb!8m2!3d42.9105949!4d-71.4253234!16s%2Fg%2F11mn84qxl8?entry=ttu"  style="color:#2a2a2a;text-decoration:none" target="_blank" title="Company Address"> <img src="https://cdn.shopify.com/s/files/1/1064/0118/files/address-icon-emailer-footer-pittcoin-2024.png?v=1708185204"  style="height:12px;max-height:12px;" alt="Company Address" title="Company Address" /> Foxx Life Sciences 12 N. Wentworth Ave. Londonderry, NH 03053 U.S.A.
+      </a>
+      </p>
+    </div>
+  `;
+}
+
+
+const port = process.env.PORT || 5000;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
