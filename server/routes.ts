@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { insertExtractionSchema } from "@shared/schema.js";
-import { extractAbandonedCheckouts } from "./services/shopify.js";
+import { extractAbandonedCheckouts, extractAbandonedCheckoutsForCustomDates } from "./services/shopify.js";
 import fetch from 'node-fetch';
 import { GoogleSheetsService } from "./services/googleSheets.js";
 import { CredentialsManager } from "./services/credentialsManager.js";
@@ -244,8 +244,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid extraction parameters' });
       }
 
-      const { startDate, endDate } = result.data;
-      const checkouts = await extractAbandonedCheckouts(startDate, endDate);
+      let checkouts;
+      if (result.data.useCustomDates && result.data.selectedDates && result.data.selectedDates.length > 0) {
+        // Handle custom selected dates
+        checkouts = await extractAbandonedCheckoutsForCustomDates(result.data.selectedDates);
+      } else if (result.data.startDate && result.data.endDate) {
+        // Handle traditional date range
+        checkouts = await extractAbandonedCheckouts(result.data.startDate, result.data.endDate);
+      } else {
+        return res.status(400).json({ error: 'Either provide startDate/endDate or selectedDates' });
+      }
       
       // Return preview data (first 10 records)
       res.json({
@@ -291,8 +299,17 @@ async function processExtraction(extractionId: string) {
 
     console.log(`[processExtraction] Extracting data from Shopify for extraction ${extractionId}`);
     
-    // Extract data from Shopify
-    const checkouts = await extractAbandonedCheckouts(extraction.startDate, extraction.endDate);
+    // Extract data from Shopify based on extraction type
+    let checkouts;
+    if (extraction.useCustomDates && extraction.selectedDates && extraction.selectedDates.length > 0) {
+      console.log(`[processExtraction] Using custom selected dates: ${extraction.selectedDates.join(', ')}`);
+      checkouts = await extractAbandonedCheckoutsForCustomDates(extraction.selectedDates);
+    } else if (extraction.startDate && extraction.endDate) {
+      console.log(`[processExtraction] Using date range: ${extraction.startDate} to ${extraction.endDate}`);
+      checkouts = await extractAbandonedCheckouts(extraction.startDate, extraction.endDate);
+    } else {
+      throw new Error('Invalid extraction parameters: missing date criteria');
+    }
     console.log(`[processExtraction] Found ${checkouts.length} checkouts for extraction ${extractionId}`);
     
     if (checkouts.length === 0) {

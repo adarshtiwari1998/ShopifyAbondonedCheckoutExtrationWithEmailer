@@ -11,8 +11,10 @@ export const users = pgTable("users", {
 
 export const extractions = pgTable("extractions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  startDate: text("start_date").notNull(),
-  endDate: text("end_date").notNull(),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  selectedDates: text("selected_dates").array(),
+  useCustomDates: boolean("use_custom_dates").default(false),
   sheetId: text("sheet_id").notNull(),
   sheetName: text("sheet_name"),
   recordsFound: integer("records_found").default(0),
@@ -45,7 +47,23 @@ export const insertExtractionSchema = createInsertSchema(extractions).omit({
   status: true,
   errorMessage: true,
   extractionData: true,
-});
+}).extend({
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  selectedDates: z.array(z.string()).optional(),
+  useCustomDates: z.boolean().optional(),
+}).refine(
+  (data) => {
+    if (data.useCustomDates) {
+      return data.selectedDates && data.selectedDates.length > 0;
+    } else {
+      return data.startDate && data.endDate;
+    }
+  },
+  {
+    message: "Either provide startDate and endDate for regular range, or selectedDates for custom selection",
+  }
+);
 
 export const insertCredentialsSchema = createInsertSchema(googleCredentials).omit({
   id: true,

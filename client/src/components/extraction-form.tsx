@@ -126,12 +126,24 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
 
   const createExtractionMutation = useMutation({
     mutationFn: async (data: z.infer<typeof formSchema>) => {
-      const response = await apiRequest('POST', '/api/extractions', {
-        startDate: data.startDate,
-        endDate: data.endDate,
+      // Prepare the payload based on whether custom dates are used
+      const payload: any = {
         sheetId: data.sheetId,
         sheetName: data.sheetName || null,
-      });
+      };
+      
+      if (data.useCustomDates && data.selectedDates && data.selectedDates.length > 0) {
+        // Use custom selected dates
+        payload.selectedDates = data.selectedDates;
+        payload.useCustomDates = true;
+      } else {
+        // Use traditional date range
+        payload.startDate = data.startDate;
+        payload.endDate = data.endDate;
+        payload.useCustomDates = false;
+      }
+      
+      const response = await apiRequest('POST', '/api/extractions', payload);
       return response.json();
     },
     onSuccess: (extraction) => {

@@ -78,6 +78,38 @@ function getNextPageUrl(linkHeader: string | null): string | null {
   return null;
 }
 
+// New function to handle custom selected dates
+export async function extractAbandonedCheckoutsForCustomDates(selectedDates: string[]): Promise<ShopifyCheckout[]> {
+  if (!selectedDates || selectedDates.length === 0) {
+    return [];
+  }
+
+  console.log(`[extractAbandonedCheckoutsForCustomDates] Processing ${selectedDates.length} custom dates: ${selectedDates.join(', ')}`);
+  
+  let allCheckouts: ShopifyCheckout[] = [];
+  
+  // Process each selected date individually
+  for (const date of selectedDates) {
+    try {
+      console.log(`[extractAbandonedCheckoutsForCustomDates] Fetching checkouts for ${date}`);
+      const checkouts = await extractAbandonedCheckouts(date, date);
+      console.log(`[extractAbandonedCheckoutsForCustomDates] Found ${checkouts.length} checkouts for ${date}`);
+      allCheckouts.push(...checkouts);
+    } catch (error) {
+      console.error(`[extractAbandonedCheckoutsForCustomDates] Error fetching checkouts for ${date}:`, error);
+      // Continue processing other dates even if one fails
+    }
+  }
+  
+  // Remove duplicates based on checkout ID
+  const uniqueCheckouts = allCheckouts.filter((checkout, index, self) => 
+    index === self.findIndex(c => c.id === checkout.id)
+  );
+  
+  console.log(`[extractAbandonedCheckoutsForCustomDates] Total unique checkouts: ${uniqueCheckouts.length}`);
+  return uniqueCheckouts;
+}
+
 export async function extractAbandonedCheckouts(startDate: string, endDate: string): Promise<ShopifyCheckout[]> {
   const baseUrl = `https://shopfls.myshopify.com/admin/api/2024-04/checkouts.json?created_at_min=${startDate}T00:00:00Z&created_at_max=${endDate}T23:59:59Z&limit=100`;
   return await fetchAbandonedCheckouts(baseUrl, options);
