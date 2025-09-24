@@ -19,9 +19,29 @@ const formSchema = z.object({
   sheetId: z.string().min(1, "Sheet ID is required"),
   sheetName: z.string().optional(),
   recordLimit: z.string().default("1000"),
+  // Basic information
+  includeBasicInfo: z.boolean().default(true),
+  includeCheckoutUrl: z.boolean().default(true),
+  includeTimestamps: z.boolean().default(true),
+  // Customer information
   includeCustomerInfo: z.boolean().default(true),
+  includeCustomerContact: z.boolean().default(true),
+  // Order details
   includeLineItems: z.boolean().default(true),
-  includeShippingTax: z.boolean().default(true),
+  includeItemDetails: z.boolean().default(true),
+  includePricing: z.boolean().default(true),
+  includeVariantInfo: z.boolean().default(false),
+  includeVendorInfo: z.boolean().default(false),
+  // Shipping and delivery
+  includeShippingInfo: z.boolean().default(true),
+  includeShippingAddress: z.boolean().default(true),
+  includeBillingAddress: z.boolean().default(false),
+  // Taxes and fees
+  includeTaxInfo: z.boolean().default(true),
+  includeDiscounts: z.boolean().default(true),
+  // Additional fields
+  includeNotes: z.boolean().default(false),
+  includeCartToken: z.boolean().default(false),
 });
 
 interface CredentialsStatus {
@@ -72,12 +92,31 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
       sheetId: "",
       sheetName: "",
       recordLimit: "1000",
+      // Basic information defaults
+      includeBasicInfo: true,
+      includeCheckoutUrl: true,
+      includeTimestamps: true,
+      // Customer information defaults
       includeCustomerInfo: true,
+      includeCustomerContact: true,
+      // Order details defaults
       includeLineItems: true,
-      includeShippingTax: true,
+      includeItemDetails: true,
+      includePricing: true,
+      includeVariantInfo: false,
+      includeVendorInfo: false,
+      // Shipping and delivery defaults
+      includeShippingInfo: true,
+      includeShippingAddress: true,
+      includeBillingAddress: false,
+      // Taxes and fees defaults
+      includeTaxInfo: true,
+      includeDiscounts: true,
+      // Additional fields defaults
+      includeNotes: false,
+      includeCartToken: false,
     },
   });
-
 
   const createExtractionMutation = useMutation({
     mutationFn: async (data: z.infer<typeof formSchema>) => {
@@ -199,7 +238,6 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
     }
   });
 
-
   const setDatePreset = (preset: string) => {
     const today = new Date();
     const currentMonth = today.getMonth();
@@ -235,111 +273,95 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
     form.setValue('endDate', endDate.toISOString().split('T')[0]);
   };
 
-  const onSubmit = (data: z.infer<typeof formSchema>) => {
-    if (!credentialsStatus?.allCredentialsReady) {
-      const missingCreds = [];
-      if (!credentialsStatus?.hasGoogleCredentials) missingCreds.push("Google Service Account");
-      if (!credentialsStatus?.hasShopifyToken) missingCreds.push("Shopify Admin Access Token");
-      
-      toast({
-        title: "Credentials Required",
-        description: `Please configure the following credentials: ${missingCreds.join(", ")}`,
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    createExtractionMutation.mutate(data);
-  };
-
   const handlePreview = () => {
     const data = form.getValues();
     previewMutation.mutate(data);
   };
 
-  return (
-    <Card className="extraction-card rounded-xl shadow-sm">
-      <CardContent className="p-6">
-        <div className="flex items-center mb-6">
-          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center mr-4">
-            <i className="fas fa-calendar-alt text-primary-foreground"></i>
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Extract Abandoned Checkouts</h2>
-            <p className="text-sm text-muted-foreground mt-1">Select date range and export data to Google Sheets</p>
-          </div>
-        </div>
+  const onSubmit = (data: z.infer<typeof formSchema>) => {
+    createExtractionMutation.mutate(data);
+  };
 
+  return (
+    <Card className="w-full">
+      <CardContent className="p-6">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Date Range Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Start Date</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input 
-                          type="date" 
-                          {...field}
-                          data-testid="input-start-date"
-                          className="pr-10"
-                        />
-                        <i className="fas fa-calendar-alt absolute right-3 top-2.5 text-muted-foreground pointer-events-none"></i>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>End Date</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input 
-                          type="date" 
-                          {...field}
-                          data-testid="input-end-date"
-                          className="pr-10"
-                        />
-                        <i className="fas fa-calendar-alt absolute right-3 top-2.5 text-muted-foreground pointer-events-none"></i>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            {/* Date Range Selection */}
+            <div className="space-y-4">
+              <h3 className="font-medium text-foreground flex items-center">
+                <i className="fas fa-calendar-alt text-primary mr-2"></i>
+                Date Range
+              </h3>
 
-            {/* Quick Date Presets */}
-            <div className="space-y-2">
-              <FormLabel>Quick Presets</FormLabel>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { key: 'thisMonth', label: 'This Month' },
-                  { key: 'lastMonth', label: 'Last Month' },
-                  { key: 'last30Days', label: 'Last 30 Days' },
-                  { key: 'last90Days', label: 'Last 90 Days' },
-                ].map((preset) => (
-                  <Button
-                    key={preset.key}
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setDatePreset(preset.key)}
-                    data-testid={`button-preset-${preset.key}`}
-                  >
-                    {preset.label}
-                  </Button>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input 
+                            type="date" 
+                            {...field}
+                            data-testid="input-start-date"
+                            className="pr-10"
+                          />
+                          <i className="fas fa-calendar-alt absolute right-3 top-2.5 text-muted-foreground pointer-events-none"></i>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Date</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input 
+                            type="date" 
+                            {...field}
+                            data-testid="input-end-date"
+                            className="pr-10"
+                          />
+                          <i className="fas fa-calendar-alt absolute right-3 top-2.5 text-muted-foreground pointer-events-none"></i>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Quick Date Presets */}
+              <div className="space-y-2">
+                <FormLabel>Quick Presets</FormLabel>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: 'thisMonth', label: 'This Month' },
+                    { key: 'lastMonth', label: 'Last Month' },
+                    { key: 'last30Days', label: 'Last 30 Days' },
+                    { key: 'last90Days', label: 'Last 90 Days' },
+                  ].map((preset) => (
+                    <Button
+                      key={preset.key}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setDatePreset(preset.key)}
+                      data-testid={`button-preset-${preset.key}`}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -587,55 +609,286 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
                     
                     <div className="space-y-2">
                       <FormLabel>Include Fields</FormLabel>
-                      <div className="space-y-1">
-                        <FormField
-                          control={form.control}
-                          name="includeCustomerInfo"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                  data-testid="checkbox-include-customer"
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm">Customer Information</FormLabel>
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="includeLineItems"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                  data-testid="checkbox-include-line-items"
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm">Line Items</FormLabel>
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="includeShippingTax"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                  data-testid="checkbox-include-shipping-tax"
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm">Shipping & Tax</FormLabel>
-                            </FormItem>
-                          )}
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Basic Information Group */}
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-medium text-muted-foreground">Basic Information</h4>
+                          <div className="space-y-2">
+                            <FormField
+                              control={form.control}
+                              name="includeBasicInfo"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-basic-info"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Checkout ID & Date
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="includeCheckoutUrl"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-checkout-url"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Recovery URL
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="includePricing"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-pricing"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Total Price & Currency
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Customer Information Group */}
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-medium text-muted-foreground">Customer Information</h4>
+                          <div className="space-y-2">
+                            <FormField
+                              control={form.control}
+                              name="includeCustomerInfo"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-customer-info"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Customer Details
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="includeCustomerContact"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-customer-contact"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Customer Contact
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Product Information Group */}
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-medium text-muted-foreground">Product Information</h4>
+                          <div className="space-y-2">
+                            <FormField
+                              control={form.control}
+                              name="includeLineItems"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-line-items"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Line Items
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="includeItemDetails"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-item-details"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Item Details
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="includeVariantInfo"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-variant-info"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Variant Information
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="includeVendorInfo"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-vendor-info"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Vendor Information
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Shipping & Tax Group */}
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-medium text-muted-foreground">Shipping & Tax</h4>
+                          <div className="space-y-2">
+                            <FormField
+                              control={form.control}
+                              name="includeShippingInfo"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-shipping-info"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Shipping Lines
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="includeShippingAddress"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-shipping-address"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Shipping Address
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="includeBillingAddress"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-billing-address"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Billing Address
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="includeTaxInfo"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-tax-info"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Tax Information
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="includeDiscounts"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="checkbox-include-discounts"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Discounts & Promotions
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
