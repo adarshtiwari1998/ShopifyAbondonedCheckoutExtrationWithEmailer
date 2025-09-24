@@ -234,9 +234,12 @@ async function processExtraction(extractionId: string) {
     const extraction = await storage.getExtraction(extractionId);
     if (!extraction) return;
 
+    console.log(`[processExtraction] Starting extraction ${extractionId}`);
+
     // Get Google credentials from file
     const googleCredentials = credentialsManager.getGoogleCredentials();
     if (!googleCredentials) {
+      console.log(`[processExtraction] Google credentials not found for extraction ${extractionId}`);
       await storage.updateExtraction(extractionId, {
         status: 'failed',
         errorMessage: 'Google credentials file not found or invalid'
@@ -244,22 +247,76 @@ async function processExtraction(extractionId: string) {
       return;
     }
 
+    // Update progress to indicate we're starting data extraction
+    await storage.updateExtraction(extractionId, {
+      status: 'processing',
+      progressMessage: 'Connecting to Shopify API...'
+    });
+
+    console.log(`[processExtraction] Extracting data from Shopify for extraction ${extractionId}`);
+    
     // Extract data from Shopify
     const checkouts = await extractAbandonedCheckouts(extraction.startDate, extraction.endDate);
+    console.log(`[processExtraction] Found ${checkouts.length} checkouts for extraction ${extractionId}`);
+    
+    if (checkouts.length === 0) {
+      await storage.updateExtraction(extractionId, {
+        status: 'completed',
+        recordsFound: 0,
+        progressMessage: 'No abandoned checkouts found in the specified date range'
+      });
+      return;
+    }
+
+    // Update progress to indicate we're starting Google Sheets export
+    await storage.updateExtraction(extractionId, {
+      status: 'processing',
+      progressMessage: 'Creating Google Sheet and formatting data...'
+    });
+    
+    console.log(`[processExtraction] Starting Google Sheets export for extraction ${extractionId}`);
     
     // Export to Google Sheets using existing sheet ID
     const sheetsService = new GoogleSheetsService(googleCredentials);
+    
+    // Test Google Sheets connection first
+    const connectionTest = await sheetsService.testConnection();
+    if (!connectionTest.success) {
+      console.log(`[processExtraction] Google Sheets connection failed for extraction ${extractionId}: ${connectionTest.error}`);
+      await storage.updateExtraction(extractionId, {
+        status: 'failed',
+        errorMessage: `Google Sheets connection failed: ${connectionTest.error}`
+      });
+      return;
+    }
+    
+    // Test sheet access
+    const sheetAccess = await sheetsService.testSheetAccess(extraction.sheetId);
+    if (!sheetAccess.success) {
+      console.log(`[processExtraction] Sheet access failed for extraction ${extractionId}: ${sheetAccess.error}`);
+      await storage.updateExtraction(extractionId, {
+        status: 'failed',
+        errorMessage: `Cannot access sheet: ${sheetAccess.error}`
+      });
+      return;
+    }
+    
+    console.log(`[processExtraction] Exporting ${checkouts.length} checkouts to sheet for extraction ${extractionId}`);
     const sheetUrl = await sheetsService.exportCheckoutsToExistingSheet(checkouts, extraction.sheetId, extraction.sheetName || undefined);
+    
+    console.log(`[processExtraction] Extraction ${extractionId} completed successfully`);
 
     // Update extraction with results
     await storage.updateExtraction(extractionId, {
       status: 'completed',
       recordsFound: checkouts.length,
       sheetUrl,
-      extractionData: checkouts
+      extractionData: checkouts,
+      progressMessage: 'Export completed successfully'
     });
 
   } catch (error) {
+    console.error(`[processExtraction] Error in extraction ${extractionId}:`, error);
     await storage.updateExtraction(extractionId, {
       status: 'failed',
       errorMessage: error instanceof Error ? error.message : 'Unknown error occurred'

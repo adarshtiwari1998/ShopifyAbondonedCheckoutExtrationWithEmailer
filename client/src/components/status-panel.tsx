@@ -18,17 +18,27 @@ export default function StatusPanel({ extractionId, recentExtractions }: StatusP
     ) ? 2000 : false,
   });
 
-  const getProgressPercent = (status: string) => {
+  const getProgressPercent = (status: string, progressMessage?: string) => {
     switch (status) {
       case 'pending': return 10;
-      case 'processing': return 60;
+      case 'processing': {
+        // More granular progress based on progress message
+        if (progressMessage?.includes('Connecting to Shopify')) return 30;
+        if (progressMessage?.includes('Creating Google Sheet')) return 70;
+        if (progressMessage?.includes('formatting data')) return 85;
+        return 60; // Default processing progress
+      }
       case 'completed': return 100;
       case 'failed': return 100;
       default: return 0;
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: string, progressMessage?: string) => {
+    if (progressMessage) {
+      return progressMessage;
+    }
+    
     switch (status) {
       case 'pending': return 'Connecting to Shopify...';
       case 'processing': return 'Extracting data...';
@@ -39,8 +49,8 @@ export default function StatusPanel({ extractionId, recentExtractions }: StatusP
   };
 
   const activeExtraction = currentExtraction || (extractionId ? recentExtractions.find(e => e.id === extractionId) : null);
-  const progress = activeExtraction ? getProgressPercent(activeExtraction.status) : 0;
-  const statusText = activeExtraction ? getStatusText(activeExtraction.status) : 'Ready';
+  const progress = activeExtraction ? getProgressPercent(activeExtraction.status, activeExtraction.progressMessage) : 0;
+  const statusText = activeExtraction ? getStatusText(activeExtraction.status, activeExtraction.progressMessage) : 'Ready';
 
   const totalExtractions = recentExtractions.length;
   const successRate = recentExtractions.length > 0 
@@ -59,7 +69,12 @@ export default function StatusPanel({ extractionId, recentExtractions }: StatusP
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Status</span>
-              <span className="text-sm font-medium text-muted-foreground" data-testid="text-current-status">
+              <span className={`text-sm font-medium ${
+                activeExtraction?.status === 'completed' ? 'text-chart-2' :
+                activeExtraction?.status === 'failed' ? 'text-destructive' :
+                activeExtraction?.status === 'processing' ? 'text-blue-600' :
+                'text-muted-foreground'
+              }`} data-testid="text-current-status">
                 {statusText}
               </span>
             </div>

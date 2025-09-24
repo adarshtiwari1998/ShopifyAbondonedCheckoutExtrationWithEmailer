@@ -19,6 +19,7 @@ export const extractions = pgTable("extractions", {
   sheetUrl: text("sheet_url"),
   status: text("status").notNull().default("pending"), // pending, processing, completed, failed
   errorMessage: text("error_message"),
+  progressMessage: text("progress_message"),
   extractionData: jsonb("extraction_data"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
