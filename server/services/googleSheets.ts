@@ -139,26 +139,20 @@ export class GoogleSheetsService {
     return [headers, ...rows];
   }
 
-  // Test Google Sheets API connection
+  // Test Google Sheets API connection by testing basic API access
   async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
-      // Try to create a minimal test spreadsheet
-      const response = await this.sheets.spreadsheets.create({
-        requestBody: {
-          properties: {
-            title: 'API Connection Test - ' + new Date().toISOString(),
-          },
-        },
-      });
+      // Instead of creating/deleting spreadsheets, just test basic API access
+      // This requires much fewer permissions
+      const testResponse = await this.auth.getAccessToken();
+      if (!testResponse || !testResponse.token) {
+        throw new Error('Failed to obtain access token');
+      }
       
-      const spreadsheetId = response.data.spreadsheetId!;
-      
-      // Immediately delete the test spreadsheet
-      const drive = google.drive({ version: 'v3', auth: this.auth });
-      await drive.files.delete({ fileId: spreadsheetId });
-      
+      console.log('Google Sheets API connection test successful');
       return { success: true };
     } catch (error) {
+      console.log('Google Sheets API connection test failed:', error);
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Unknown error'

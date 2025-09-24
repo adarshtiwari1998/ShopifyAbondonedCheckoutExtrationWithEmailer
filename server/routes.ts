@@ -315,18 +315,7 @@ async function processExtraction(extractionId: string) {
     // Export to Google Sheets using existing sheet ID
     const sheetsService = new GoogleSheetsService(googleCredentials);
     
-    // Test Google Sheets connection first
-    const connectionTest = await sheetsService.testConnection();
-    if (!connectionTest.success) {
-      console.log(`[processExtraction] Google Sheets connection failed for extraction ${extractionId}: ${connectionTest.error}`);
-      await storage.updateExtraction(extractionId, {
-        status: 'failed',
-        errorMessage: `Google Sheets connection failed: ${connectionTest.error}`
-      });
-      return;
-    }
-    
-    // Test sheet access
+    // Test sheet access (this is sufficient - no need for general connection test)
     const sheetAccess = await sheetsService.testSheetAccess(extraction.sheetId);
     if (!sheetAccess.success) {
       console.log(`[processExtraction] Sheet access failed for extraction ${extractionId}: ${sheetAccess.error}`);
@@ -336,6 +325,8 @@ async function processExtraction(extractionId: string) {
       });
       return;
     }
+    
+    console.log(`[processExtraction] Sheet access verified successfully for extraction ${extractionId}`);
     
     console.log(`[processExtraction] Exporting ${checkouts.length} checkouts to sheet for extraction ${extractionId}`);
     const sheetUrl = await sheetsService.exportCheckoutsToExistingSheet(checkouts, extraction.sheetId, extraction.sheetName || undefined);
