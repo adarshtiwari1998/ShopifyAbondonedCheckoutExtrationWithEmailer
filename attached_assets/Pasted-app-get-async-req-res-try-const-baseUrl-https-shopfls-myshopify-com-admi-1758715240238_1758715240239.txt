@@ -1,0 +1,55 @@
+app.get('/', async (req, res) => {
+  try {
+    const baseUrl = 'https://shopfls.myshopify.com/admin/api/2024-04/checkouts.json?created_at_min=2025-09-01T00:00:00Z&created_at_max=2025-09-31T23:59:59Z&limit=100';
+    const abandonedCheckouts = await fetchAbandonedCheckouts(baseUrl, options);
+    // Construct HTML response
+    const abandonedCheckoutsCount = abandonedCheckouts.length;
+    let htmlResponse = '<!DOCTYPE html><html><head><title>Abandoned Checkouts</title></head><body>';
+    htmlResponse += '<h1>Abandoned Checkouts for Aug 2025</h1>';
+    htmlResponse += `<p>Total Abandoned Checkouts: <span>${abandonedCheckoutsCount}</span></p>`;
+    htmlResponse += ``
+    htmlResponse += '<ul>';
+    abandonedCheckouts.forEach(checkout => {
+      htmlResponse += `<li>ID: ${checkout.id}, Date: ${checkout.updated_at}, Email: ${checkout.email}, Total Price: ${checkout.total_price}, Checkout URL: <a href="${checkout.abandoned_checkout_url}">Checkout Now</a>`;
+      if (checkout.customer) {
+        htmlResponse += `, Customer: ${checkout.customer.email}, ${checkout.customer.first_name} ${checkout.customer.last_name}`;
+      }
+        if (checkout.shipping_lines && checkout.shipping_lines.length > 0) {
+          htmlResponse += `<br>Shipping Lines: <ul>`;
+          checkout.shipping_lines.forEach(shippingLine => {
+            htmlResponse += `<li>${shippingLine.title}: ${shippingLine.price}</li>`;
+          });
+          htmlResponse += `</ul>`;
+        }
+        if (checkout.tax_lines && checkout.tax_lines.length > 0) {
+          htmlResponse += `<br>Tax Lines: <ul>`;
+          checkout.tax_lines.forEach(taxLine => {
+            htmlResponse += `<li>${taxLine.title}: ${taxLine.price}</li>`;
+          });
+          htmlResponse += `</ul>`;
+        }
+        if (checkout.shipping_address) {
+          htmlResponse += `<br>Shipping Address: ${checkout.shipping_address.address1}, ${checkout.shipping_address.city}, ${checkout.shipping_address.country}`;
+        }
+        if (checkout.billing_address) {
+          htmlResponse += `<br>Billing Address: ${checkout.billing_address.address1}, ${checkout.billing_address.city}, ${checkout.billing_address.country}`;
+        }
+        if (checkout.line_items && checkout.line_items.length > 0) {
+          htmlResponse += `<br>Line Items: <ul>`;
+          checkout.line_items.forEach(lineItem => {
+            htmlResponse += `<li>Title: ${lineItem.title}, Variant Id: ${lineItem.variant_id}, Price: ${lineItem.price}, Compare Price: ${lineItem.compare_at_price}, Quantity: ${lineItem.quantity}, Vendor: ${lineItem.vendor}</li>`;
+          });
+          htmlResponse += `</ul>`;
+        }
+      // Add more details as needed
+      htmlResponse += `</li>`;
+    });
+    htmlResponse += '</ul>';
+    htmlResponse += '</body></html>';
+    // Send HTML response
+    res.send(htmlResponse);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Error fetching abandoned checkouts');
+  }
+});

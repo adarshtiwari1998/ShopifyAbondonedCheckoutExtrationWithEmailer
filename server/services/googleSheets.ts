@@ -86,6 +86,52 @@ export class GoogleSheetsService {
     return [headers, ...rows];
   }
 
+  // Test Google Sheets API connection
+  async testConnection(): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Try to create a minimal test spreadsheet
+      const response = await this.sheets.spreadsheets.create({
+        requestBody: {
+          properties: {
+            title: 'API Connection Test - ' + new Date().toISOString(),
+          },
+        },
+      });
+      
+      const spreadsheetId = response.data.spreadsheetId!;
+      
+      // Immediately delete the test spreadsheet
+      const drive = google.drive({ version: 'v3', auth: this.auth });
+      await drive.files.delete({ fileId: spreadsheetId });
+      
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  // Test access to a specific sheet
+  async testSheetAccess(sheetId: string): Promise<{ success: boolean; error?: string; sheetName?: string }> {
+    try {
+      const response = await this.sheets.spreadsheets.get({
+        spreadsheetId: sheetId,
+      });
+      
+      return {
+        success: true,
+        sheetName: response.data.properties?.title || 'Unknown'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Sheet not accessible'
+      };
+    }
+  }
+
   async populateSheet(spreadsheetId: string, checkouts: ShopifyCheckout[], tabName?: string): Promise<void> {
     try {
       const data = this.formatCheckoutData(checkouts);

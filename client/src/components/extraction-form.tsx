@@ -31,6 +31,24 @@ interface CredentialsStatus {
   allCredentialsReady: boolean;
 }
 
+interface VerificationResult {
+  success: boolean;
+  error?: string;
+  shopName?: string;
+  sheetName?: string;
+}
+
+interface VerificationStatus {
+  google: 'idle' | 'testing' | 'success' | 'error';
+  shopify: 'idle' | 'testing' | 'success' | 'error';
+  sheet: 'idle' | 'testing' | 'success' | 'error';
+  googleError?: string;
+  shopifyError?: string;
+  sheetError?: string;
+  shopName?: string;
+  sheetName?: string;
+}
+
 interface ExtractionFormProps {
   credentialsStatus?: CredentialsStatus;
   onExtractionStart: (extractionId: string) => void;
@@ -40,6 +58,11 @@ interface ExtractionFormProps {
 export default function ExtractionForm({ credentialsStatus, onExtractionStart, onPreviewData }: ExtractionFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>({
+    google: 'idle',
+    shopify: 'idle', 
+    sheet: 'idle'
+  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -96,6 +119,84 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
     onSuccess: (data) => {
       onPreviewData(data);
     },
+  });
+
+  // Verification mutations
+  const verifyGoogleMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/credentials/test-google');
+      return response.json() as Promise<VerificationResult>;
+    },
+    onMutate: () => {
+      setVerificationStatus(prev => ({ ...prev, google: 'testing' }));
+    },
+    onSuccess: (result) => {
+      setVerificationStatus(prev => ({
+        ...prev, 
+        google: result.success ? 'success' : 'error',
+        googleError: result.error
+      }));
+      if (result.success) {
+        toast({ title: "Success", description: "Google Service Account verified successfully!" });
+      } else {
+        toast({ title: "Verification Failed", description: result.error, variant: "destructive" });
+      }
+    },
+    onError: () => {
+      setVerificationStatus(prev => ({ ...prev, google: 'error', googleError: 'Connection failed' }));
+    }
+  });
+
+  const verifyShopifyMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/credentials/test-shopify');
+      return response.json() as Promise<VerificationResult>;
+    },
+    onMutate: () => {
+      setVerificationStatus(prev => ({ ...prev, shopify: 'testing' }));
+    },
+    onSuccess: (result) => {
+      setVerificationStatus(prev => ({
+        ...prev, 
+        shopify: result.success ? 'success' : 'error',
+        shopifyError: result.error,
+        shopName: result.shopName
+      }));
+      if (result.success) {
+        toast({ title: "Success", description: `Connected to ${result.shopName || 'Shopify store'}!` });
+      } else {
+        toast({ title: "Verification Failed", description: result.error, variant: "destructive" });
+      }
+    },
+    onError: () => {
+      setVerificationStatus(prev => ({ ...prev, shopify: 'error', shopifyError: 'Connection failed' }));
+    }
+  });
+
+  const verifySheetMutation = useMutation({
+    mutationFn: async (sheetId: string) => {
+      const response = await apiRequest('POST', '/api/credentials/test-sheet', { sheetId });
+      return response.json() as Promise<VerificationResult>;
+    },
+    onMutate: () => {
+      setVerificationStatus(prev => ({ ...prev, sheet: 'testing' }));
+    },
+    onSuccess: (result) => {
+      setVerificationStatus(prev => ({
+        ...prev, 
+        sheet: result.success ? 'success' : 'error',
+        sheetError: result.error,
+        sheetName: result.sheetName
+      }));
+      if (result.success) {
+        toast({ title: "Success", description: `Sheet "${result.sheetName}" is accessible!` });
+      } else {
+        toast({ title: "Verification Failed", description: result.error, variant: "destructive" });
+      }
+    },
+    onError: () => {
+      setVerificationStatus(prev => ({ ...prev, sheet: 'error', sheetError: 'Connection failed' }));
+    }
   });
 
 
@@ -290,30 +391,158 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
               {/* Credentials Status */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <div className={`w-2 h-2 ${credentialsStatus?.hasGoogleCredentials ? 'bg-chart-2' : 'bg-destructive'} rounded-full mr-3`}></div>
-                    <span className="text-sm font-medium text-foreground">Google Service Account</span>
+                  <div className="flex items-center flex-1">
+                    <div className={`w-2 h-2 ${
+                      verificationStatus.google === 'success' ? 'bg-chart-2' : 
+                      verificationStatus.google === 'error' ? 'bg-destructive' :
+                      credentialsStatus?.hasGoogleCredentials ? 'bg-yellow-500' : 'bg-destructive'
+                    } rounded-full mr-3`}></div>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-foreground">Google Service Account</span>
+                      {verificationStatus.googleError && (
+                        <p className="text-xs text-destructive mt-1">{verificationStatus.googleError}</p>
+                      )}
+                    </div>
                   </div>
-                  <span className={`text-xs font-medium ${credentialsStatus?.hasGoogleCredentials ? 'text-chart-2' : 'text-destructive'}`}>
-                    {credentialsStatus?.hasGoogleCredentials ? 'Ready' : 'File Missing'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-medium ${
+                      verificationStatus.google === 'success' ? 'text-chart-2' :
+                      verificationStatus.google === 'error' ? 'text-destructive' :
+                      credentialsStatus?.hasGoogleCredentials ? 'text-yellow-600' : 'text-destructive'
+                    }`}>
+                      {verificationStatus.google === 'success' ? 'Verified' :
+                       verificationStatus.google === 'error' ? 'Failed' :
+                       credentialsStatus?.hasGoogleCredentials ? 'Ready' : 'File Missing'}
+                    </span>
+                    {credentialsStatus?.hasGoogleCredentials && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => verifyGoogleMutation.mutate()}
+                        disabled={verifyGoogleMutation.isPending}
+                        data-testid="button-verify-google"
+                      >
+                        {verifyGoogleMutation.isPending ? (
+                          <i className="fas fa-spinner fa-spin mr-2"></i>
+                        ) : (
+                          <i className="fas fa-check-circle mr-2"></i>
+                        )}
+                        Verify
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <div className={`w-2 h-2 ${credentialsStatus?.hasShopifyToken ? 'bg-chart-2' : 'bg-destructive'} rounded-full mr-3`}></div>
-                    <span className="text-sm font-medium text-foreground">Shopify Admin Token</span>
+                  <div className="flex items-center flex-1">
+                    <div className={`w-2 h-2 ${
+                      verificationStatus.shopify === 'success' ? 'bg-chart-2' : 
+                      verificationStatus.shopify === 'error' ? 'bg-destructive' :
+                      credentialsStatus?.hasShopifyToken ? 'bg-yellow-500' : 'bg-destructive'
+                    } rounded-full mr-3`}></div>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-foreground">Shopify Admin Token</span>
+                      {verificationStatus.shopName && (
+                        <p className="text-xs text-chart-2 mt-1">Connected to {verificationStatus.shopName}</p>
+                      )}
+                      {verificationStatus.shopifyError && (
+                        <p className="text-xs text-destructive mt-1">{verificationStatus.shopifyError}</p>
+                      )}
+                    </div>
                   </div>
-                  <span className={`text-xs font-medium ${credentialsStatus?.hasShopifyToken ? 'text-chart-2' : 'text-destructive'}`}>
-                    {credentialsStatus?.hasShopifyToken ? 'Configured' : 'Missing'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-medium ${
+                      verificationStatus.shopify === 'success' ? 'text-chart-2' :
+                      verificationStatus.shopify === 'error' ? 'text-destructive' :
+                      credentialsStatus?.hasShopifyToken ? 'text-yellow-600' : 'text-destructive'
+                    }`}>
+                      {verificationStatus.shopify === 'success' ? 'Verified' :
+                       verificationStatus.shopify === 'error' ? 'Failed' :
+                       credentialsStatus?.hasShopifyToken ? 'Configured' : 'Missing'}
+                    </span>
+                    {credentialsStatus?.hasShopifyToken && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => verifyShopifyMutation.mutate()}
+                        disabled={verifyShopifyMutation.isPending}
+                        data-testid="button-verify-shopify"
+                      >
+                        {verifyShopifyMutation.isPending ? (
+                          <i className="fas fa-spinner fa-spin mr-2"></i>
+                        ) : (
+                          <i className="fas fa-check-circle mr-2"></i>
+                        )}
+                        Verify
+                      </Button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Sheet Verification */}
+                {form.watch('sheetId') && (
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                    <div className="flex items-center flex-1">
+                      <div className={`w-2 h-2 ${
+                        verificationStatus.sheet === 'success' ? 'bg-chart-2' : 
+                        verificationStatus.sheet === 'error' ? 'bg-destructive' :
+                        'bg-yellow-500'
+                      } rounded-full mr-3`}></div>
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-foreground">Sheet Access</span>
+                        {verificationStatus.sheetName && (
+                          <p className="text-xs text-chart-2 mt-1">Sheet: {verificationStatus.sheetName}</p>
+                        )}
+                        {verificationStatus.sheetError && (
+                          <p className="text-xs text-destructive mt-1">{verificationStatus.sheetError}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium ${
+                        verificationStatus.sheet === 'success' ? 'text-chart-2' :
+                        verificationStatus.sheet === 'error' ? 'text-destructive' :
+                        'text-yellow-600'
+                      }`}>
+                        {verificationStatus.sheet === 'success' ? 'Accessible' :
+                         verificationStatus.sheet === 'error' ? 'Failed' :
+                         'Not Tested'}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => verifySheetMutation.mutate(form.getValues('sheetId'))}
+                        disabled={verifySheetMutation.isPending || !form.watch('sheetId')}
+                        data-testid="button-verify-sheet"
+                      >
+                        {verifySheetMutation.isPending ? (
+                          <i className="fas fa-spinner fa-spin mr-2"></i>
+                        ) : (
+                          <i className="fas fa-check-circle mr-2"></i>
+                        )}
+                        Test Access
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {!credentialsStatus?.allCredentialsReady && (
                   <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <p className="text-sm text-yellow-800">
                       <i className="fas fa-info-circle mr-2"></i>
                       To complete setup, please add your credentials via server configuration.
+                    </p>
+                  </div>
+                )}
+                
+                {(verificationStatus.google === 'success' && verificationStatus.shopify === 'success') && (
+                  <div className="p-3 bg-chart-2/10 border border-chart-2/20 rounded-lg">
+                    <p className="text-sm text-chart-2">
+                      <i className="fas fa-check-circle mr-2"></i>
+                      All credentials verified and ready to use!
                     </p>
                   </div>
                 )}

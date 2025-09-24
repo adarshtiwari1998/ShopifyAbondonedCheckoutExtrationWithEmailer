@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { insertExtractionSchema } from "@shared/schema.js";
 import { extractAbandonedCheckouts } from "./services/shopify.js";
+import fetch from 'node-fetch';
 import { GoogleSheetsService } from "./services/googleSheets.js";
 import { CredentialsManager } from "./services/credentialsManager.js";
 
@@ -21,6 +22,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: 'Failed to check credentials status' });
+    }
+  });
+
+  // Test Google Service Account connection
+  app.post('/api/credentials/test-google', async (req, res) => {
+    try {
+      const googleCredentials = credentialsManager.getGoogleCredentials();
+      if (!googleCredentials) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Google credentials not found or invalid' 
+        });
+      }
+
+      const sheetsService = new GoogleSheetsService(googleCredentials);
+      const result = await sheetsService.testConnection();
+      
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  // Test sheet access
+  app.post('/api/credentials/test-sheet', async (req, res) => {
+    try {
+      const { sheetId } = req.body;
+      if (!sheetId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Sheet ID is required' 
+        });
+      }
+
+      const googleCredentials = credentialsManager.getGoogleCredentials();
+      if (!googleCredentials) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Google credentials not found or invalid' 
+        });
+      }
+
+      const sheetsService = new GoogleSheetsService(googleCredentials);
+      const result = await sheetsService.testSheetAccess(sheetId);
+      
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  // Test Shopify API connection
+  app.post('/api/credentials/test-shopify', async (req, res) => {
+    try {
+      if (!credentialsManager.validateShopifyToken()) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Shopify access token not configured' 
+        });
+      }
+
+      // Test with a simple API call - just get store info
+      const testUrl = 'https://shopfls.myshopify.com/admin/api/2024-04/shop.json';
+      const response = await fetch(testUrl, {
+        method: 'GET',
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || '',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        res.json({ 
+          success: true, 
+          shopName: data.shop?.name || 'Unknown'
+        });
+      } else {
+        res.json({ 
+          success: false, 
+          error: `API returned ${response.status}: ${response.statusText}` 
+        });
+      }
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
     }
   });
 
