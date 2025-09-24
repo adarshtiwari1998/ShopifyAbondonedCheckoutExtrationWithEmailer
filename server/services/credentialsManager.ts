@@ -38,19 +38,32 @@ export class CredentialsManager {
 
   validateGoogleCredentials(): boolean {
     try {
-      if (!fs.existsSync(this.googleCredentialsPath)) {
-        console.error('Google credentials file does not exist');
+      // First try to get credentials from environment variable
+      const envCredentials = process.env.GOOGLE_SERVICE_ACCOUNT;
+      
+      let credentialsContent: string;
+      let source: string;
+
+      if (envCredentials) {
+        credentialsContent = envCredentials;
+        source = 'environment variable';
+        console.log('Using Google credentials from environment variable');
+      } else if (fs.existsSync(this.googleCredentialsPath)) {
+        credentialsContent = fs.readFileSync(this.googleCredentialsPath, 'utf8');
+        source = 'file';
+        console.log('Using Google credentials from file (fallback)');
+      } else {
+        console.error('Google credentials not found in environment variable GOOGLE_SERVICE_ACCOUNT or file');
         return false;
       }
 
-      const credentialsContent = fs.readFileSync(this.googleCredentialsPath, 'utf8');
-      console.log('Credentials file content length:', credentialsContent.length);
+      console.log(`Credentials ${source} content length:`, credentialsContent.length);
       
       let credentials;
       try {
         credentials = JSON.parse(credentialsContent);
       } catch (parseError) {
-        console.error('Failed to parse Google credentials JSON:', parseError);
+        console.error(`Failed to parse Google credentials JSON from ${source}:`, parseError);
         return false;
       }
 
@@ -102,18 +115,33 @@ export class CredentialsManager {
 
   getGoogleCredentials(): GoogleCredentialsJson | null {
     try {
-      if (!fs.existsSync(this.googleCredentialsPath)) {
-        console.error('Google credentials file does not exist');
+      // First try to get credentials from environment variable
+      const envCredentials = process.env.GOOGLE_SERVICE_ACCOUNT;
+      
+      let credentialsContent: string;
+      let source: string;
+      let fromEnv = false;
+
+      if (envCredentials) {
+        credentialsContent = envCredentials;
+        source = 'environment variable';
+        fromEnv = true;
+        console.log('Loading Google credentials from environment variable');
+      } else if (fs.existsSync(this.googleCredentialsPath)) {
+        credentialsContent = fs.readFileSync(this.googleCredentialsPath, 'utf8');
+        source = 'file';
+        console.log('Loading Google credentials from file (fallback)');
+      } else {
+        console.error('Google credentials not found in environment variable GOOGLE_SERVICE_ACCOUNT or file');
         return null;
       }
 
-      const credentialsContent = fs.readFileSync(this.googleCredentialsPath, 'utf8');
       let credentials;
       
       try {
         credentials = JSON.parse(credentialsContent);
       } catch (parseError) {
-        console.error('Failed to parse Google credentials JSON:', parseError);
+        console.error(`Failed to parse Google credentials JSON from ${source}:`, parseError);
         return null;
       }
 
@@ -131,9 +159,13 @@ export class CredentialsManager {
         console.log('Fixing private key format...');
         credentials.private_key = this.fixPrivateKeyFormat(credentials.private_key);
         
-        // Save the fixed credentials back to file
-        fs.writeFileSync(this.googleCredentialsPath, JSON.stringify(credentials, null, 2));
-        console.log('Private key format fixed and saved');
+        // Only save back to file if credentials came from file, not environment variable
+        if (!fromEnv && fs.existsSync(this.googleCredentialsPath)) {
+          fs.writeFileSync(this.googleCredentialsPath, JSON.stringify(credentials, null, 2));
+          console.log('Private key format fixed and saved to file');
+        } else {
+          console.log('Private key format fixed (environment variable - not saved to file)');
+        }
       }
       
       return credentials;
@@ -162,7 +194,7 @@ export class CredentialsManager {
     }
 
     if (!this.validateGoogleCredentials()) {
-      errors.push(`Google service account credentials file not found or invalid at: ${this.googleCredentialsPath}`);
+      errors.push(`Google service account credentials not found or invalid. Please set GOOGLE_SERVICE_ACCOUNT environment variable or place credentials file at: ${this.googleCredentialsPath}`);
     }
 
     return {
