@@ -76,17 +76,16 @@ export class CredentialsManager {
         }
       }
 
-      // Validate private key format
-      if (!credentials.private_key.includes('-----BEGIN PRIVATE KEY-----') || 
-          !credentials.private_key.includes('-----END PRIVATE KEY-----')) {
-        console.error('Invalid private key format: missing BEGIN/END markers');
-        return false;
+      // Normalize private key before validation
+      let privateKey = credentials.private_key;
+      if (privateKey.includes('\\n')) {
+        privateKey = this.fixPrivateKeyFormat(privateKey);
       }
 
-      // Check for common private key issues
-      const privateKey = credentials.private_key;
-      if (privateKey.includes('\\n')) {
-        console.error('Private key contains escaped newlines (\\\\n) - needs proper formatting');
+      // Validate private key format
+      if (!privateKey.includes('-----BEGIN PRIVATE KEY-----') || 
+          !privateKey.includes('-----END PRIVATE KEY-----')) {
+        console.error('Invalid private key format: missing BEGIN/END markers');
         return false;
       }
 
@@ -154,18 +153,10 @@ export class CredentialsManager {
         }
       }
 
-      // Fix private key format if needed
-      if (credentials.private_key.includes('\\n')) {
-        console.log('Fixing private key format...');
+      // Normalize private key format consistently for all sources
+      if (fromEnv || credentials.private_key.includes('\\n')) {
+        console.log('Normalizing private key format for proper parsing');
         credentials.private_key = this.fixPrivateKeyFormat(credentials.private_key);
-        
-        // Only save back to file if credentials came from file, not environment variable
-        if (!fromEnv && fs.existsSync(this.googleCredentialsPath)) {
-          fs.writeFileSync(this.googleCredentialsPath, JSON.stringify(credentials, null, 2));
-          console.log('Private key format fixed and saved to file');
-        } else {
-          console.log('Private key format fixed (environment variable - not saved to file)');
-        }
       }
       
       return credentials;
