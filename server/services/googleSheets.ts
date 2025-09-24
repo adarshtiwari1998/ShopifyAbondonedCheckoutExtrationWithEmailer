@@ -20,15 +20,68 @@ export class GoogleSheetsService {
   private sheets: sheets_v4.Sheets;
 
   constructor(credentials: GoogleCredentialsJson) {
-    this.auth = new GoogleAuth({
-      credentials,
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive.file'
-      ],
-    });
+    try {
+      // Ensure private key has proper newline formatting
+      const fixedCredentials = {
+        ...credentials,
+        private_key: this.fixPrivateKey(credentials.private_key)
+      };
 
-    this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+      console.log('Initializing GoogleAuth with fixed credentials');
+      
+      this.auth = new GoogleAuth({
+        credentials: fixedCredentials,
+        scopes: [
+          'https://www.googleapis.com/auth/spreadsheets',
+          'https://www.googleapis.com/auth/drive.file'
+        ],
+      });
+
+      this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+      console.log('GoogleSheetsService initialized successfully');
+    } catch (error) {
+      console.error('Error initializing GoogleSheetsService:', error);
+      throw error;
+    }
+  }
+
+  private fixPrivateKey(privateKey: string): string {
+    let key = privateKey;
+    
+    // Replace escaped newlines with real newlines
+    if (key.includes('\\n')) {
+      key = key.replace(/\\n/g, '\n');
+    }
+    
+    // If it already has proper newlines and markers, return as-is
+    if (key.includes('\n') && key.startsWith('-----BEGIN') && key.endsWith('-----')) {
+      return key;
+    }
+    
+    // Otherwise, ensure proper formatting
+    const beginMarker = '-----BEGIN PRIVATE KEY-----';
+    const endMarker = '-----END PRIVATE KEY-----';
+    
+    // Extract just the key content
+    let keyContent = key;
+    if (keyContent.includes(beginMarker)) {
+      keyContent = keyContent.replace(beginMarker, '');
+    }
+    if (keyContent.includes(endMarker)) {
+      keyContent = keyContent.replace(endMarker, '');
+    }
+    
+    // Remove all whitespace and newlines
+    keyContent = keyContent.replace(/[\s\n\r]/g, '');
+    
+    // Rebuild with proper formatting
+    const lines = [beginMarker];
+    for (let i = 0; i < keyContent.length; i += 64) {
+      lines.push(keyContent.substring(i, i + 64));
+    }
+    lines.push(endMarker);
+    
+    return lines.join('\n');
   }
 
   async createSpreadsheet(title: string): Promise<{ spreadsheetId: string; url: string }> {
