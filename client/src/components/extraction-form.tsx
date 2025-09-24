@@ -23,14 +23,20 @@ const formSchema = z.object({
   includeShippingTax: z.boolean().default(true),
 });
 
+interface CredentialsStatus {
+  hasCredentials: boolean;
+  hasGoogleCredentials: boolean;
+  hasShopifyToken: boolean;
+  allCredentialsReady: boolean;
+}
+
 interface ExtractionFormProps {
-  credentialsStatus?: { hasCredentials: boolean; createdAt?: string };
+  credentialsStatus?: CredentialsStatus;
   onExtractionStart: (extractionId: string) => void;
   onPreviewData: (data: any) => void;
 }
 
 export default function ExtractionForm({ credentialsStatus, onExtractionStart, onPreviewData }: ExtractionFormProps) {
-  const [credentialsFile, setCredentialsFile] = useState<File | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -47,38 +53,6 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
     },
   });
 
-  const uploadCredentialsMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('credentials', file);
-      
-      const response = await fetch('/api/credentials', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to upload credentials');
-      }
-      
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Credentials Uploaded",
-        description: "Google Service Account credentials have been successfully configured.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/credentials/status'] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Upload Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
 
   const createExtractionMutation = useMutation({
     mutationFn: async (data: z.infer<typeof formSchema>) => {
@@ -121,13 +95,6 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
     },
   });
 
-  const handleCredentialsUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setCredentialsFile(file);
-      uploadCredentialsMutation.mutate(file);
-    }
-  };
 
   const setDatePreset = (preset: string) => {
     const today = new Date();
@@ -165,10 +132,14 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
   };
 
   const onSubmit = (data: z.infer<typeof formSchema>) => {
-    if (!credentialsStatus?.hasCredentials) {
+    if (!credentialsStatus?.allCredentialsReady) {
+      const missingCreds = [];
+      if (!credentialsStatus?.hasGoogleCredentials) missingCreds.push("Google Service Account");
+      if (!credentialsStatus?.hasShopifyToken) missingCreds.push("Shopify Admin Access Token");
+      
       toast({
         title: "Credentials Required",
-        description: "Please upload Google Service Account credentials before extracting data.",
+        description: `Please configure the following credentials: ${missingCreds.join(", ")}`,
         variant: "destructive",
       });
       return;
@@ -295,29 +266,36 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
               />
               
               {/* Credentials Status */}
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center">
-                  <div className={`w-2 h-2 ${credentialsStatus?.hasCredentials ? 'bg-chart-2' : 'bg-destructive'} rounded-full mr-3`}></div>
-                  <span className="text-sm font-medium text-foreground">Google Service Account</span>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <div className="flex items-center">
+                    <div className={`w-2 h-2 ${credentialsStatus?.hasGoogleCredentials ? 'bg-chart-2' : 'bg-destructive'} rounded-full mr-3`}></div>
+                    <span className="text-sm font-medium text-foreground">Google Service Account</span>
+                  </div>
+                  <span className={`text-xs font-medium ${credentialsStatus?.hasGoogleCredentials ? 'text-chart-2' : 'text-destructive'}`}>
+                    {credentialsStatus?.hasGoogleCredentials ? 'Ready' : 'File Missing'}
+                  </span>
                 </div>
-                <span className={`text-xs font-medium ${credentialsStatus?.hasCredentials ? 'text-chart-2' : 'text-destructive'}`}>
-                  {credentialsStatus?.hasCredentials ? 'Connected' : 'Not Connected'}
-                </span>
-              </div>
 
-              {!credentialsStatus?.hasCredentials && (
-                <div className="space-y-2">
-                  <FormLabel>Upload credentials.json</FormLabel>
-                  <Input
-                    type="file"
-                    accept=".json"
-                    onChange={handleCredentialsUpload}
-                    disabled={uploadCredentialsMutation.isPending}
-                    data-testid="input-credentials-upload"
-                  />
-                  <p className="text-xs text-muted-foreground">Upload your Google Service Account credentials JSON file</p>
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <div className="flex items-center">
+                    <div className={`w-2 h-2 ${credentialsStatus?.hasShopifyToken ? 'bg-chart-2' : 'bg-destructive'} rounded-full mr-3`}></div>
+                    <span className="text-sm font-medium text-foreground">Shopify Admin Token</span>
+                  </div>
+                  <span className={`text-xs font-medium ${credentialsStatus?.hasShopifyToken ? 'text-chart-2' : 'text-destructive'}`}>
+                    {credentialsStatus?.hasShopifyToken ? 'Configured' : 'Missing'}
+                  </span>
                 </div>
-              )}
+
+                {!credentialsStatus?.allCredentialsReady && (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-800">
+                      <i className="fas fa-info-circle mr-2"></i>
+                      To complete setup, please add your credentials via server configuration.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Advanced Options */}
