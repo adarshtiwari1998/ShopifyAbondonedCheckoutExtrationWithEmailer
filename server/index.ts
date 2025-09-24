@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { CredentialsManager } from "./services/credentialsManager.js";
 
 const app = express();
 app.use(express.json());
@@ -37,6 +38,24 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Validate credentials at startup
+  const credentialsManager = CredentialsManager.getInstance();
+  const credentialsValidation = credentialsManager.validateAllCredentials();
+  
+  if (!credentialsValidation.valid) {
+    log('⚠️  Credentials validation warnings:');
+    credentialsValidation.errors.forEach(error => log(`   - ${error}`));
+    log('📋 To fix these issues:');
+    if (!credentialsManager.validateShopifyToken()) {
+      log('   1. Add SHOPIFY_ADMIN_ACCESS_TOKEN to your environment variables');
+    }
+    if (!credentialsManager.validateGoogleCredentials()) {
+      log(`   2. Place your Google service account JSON file at: ${credentialsManager.getGoogleCredentialsPath()}`);
+    }
+  } else {
+    log('✅ All credentials configured properly');
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

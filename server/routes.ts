@@ -1,72 +1,23 @@
-import type { Express, Request } from "express";
+import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
-import { insertExtractionSchema, insertCredentialsSchema } from "@shared/schema.js";
+import { insertExtractionSchema } from "@shared/schema.js";
 import { extractAbandonedCheckouts } from "./services/shopify.js";
 import { GoogleSheetsService } from "./services/googleSheets.js";
-import multer from 'multer';
-
-interface MulterRequest extends Request {
-  file?: Express.Multer.File;
-}
-
-const upload = multer({ dest: 'uploads/' });
+import { CredentialsManager } from "./services/credentialsManager.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
-  // Upload Google Service Account credentials
-  app.post('/api/credentials', upload.single('credentials'), async (req: MulterRequest, res) => {
-    let filePath: string | undefined;
-    try {
-      if (!req.file) {
-        return res.status(400).json({ error: 'No credentials file uploaded' });
-      }
+  const credentialsManager = CredentialsManager.getInstance();
 
-      filePath = req.file.path;
-      const fs = await import('fs');
-      const credentialsJson = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      
-      // Validate credentials structure
-      const requiredFields = ['type', 'project_id', 'private_key', 'client_email'];
-      for (const field of requiredFields) {
-        if (!credentialsJson[field]) {
-          return res.status(400).json({ error: `Invalid credentials: missing ${field}` });
-        }
-      }
-
-      const result = insertCredentialsSchema.safeParse({ credentialsJson });
-      if (!result.success) {
-        return res.status(400).json({ error: 'Invalid credentials format' });
-      }
-
-      const credentials = await storage.createCredentials(result.data);
-      
-      // Clean up uploaded file
-      fs.unlinkSync(filePath);
-      filePath = undefined;
-      
-      res.json({ success: true, id: credentials.id });
-    } catch (error) {
-      // Clean up file on error
-      if (filePath) {
-        try {
-          const fs = await import('fs');
-          fs.unlinkSync(filePath);
-        } catch (cleanupError) {
-          console.error('Failed to cleanup temp file:', cleanupError);
-        }
-      }
-      res.status(500).json({ error: 'Failed to upload credentials' });
-    }
-  });
-
-  // Get active credentials status
+  // Get credentials status
   app.get('/api/credentials/status', async (req, res) => {
     try {
-      const credentials = await storage.getActiveCredentials();
+      const status = credentialsManager.getCredentialsStatus();
       res.json({ 
-        hasCredentials: !!credentials,
-        createdAt: credentials?.createdAt 
+        hasCredentials: status.allCredentialsReady,
+        hasGoogleCredentials: status.hasGoogleCredentials,
+        hasShopifyToken: status.hasShopifyToken,
+        allCredentialsReady: status.allCredentialsReady
       });
     } catch (error) {
       res.status(500).json({ error: 'Failed to check credentials status' });
@@ -96,6 +47,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!extraction) {
         return res.status(404).json({ error: 'Extraction not found' });
+      }
+
+      // Check if all credentials are ready
+      const credentialsStatus = credentialsManager.getCredentialsStatus();
+      if (!credentialsStatus.allCredentialsReady) {
+        return res.status(400).json({ 
+          error: 'Credentials not ready',
+          details: {
+            hasGoogleCredentials: credentialsStatus.hasGoogleCredentials,
+            hasShopifyToken: credentialsStatus.hasShopifyToken
+          }
+        });
       }
 
       // Update status to processing
@@ -140,6 +103,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Preview extraction data (without creating Google Sheet)
   app.post('/api/extractions/preview', async (req, res) => {
     try {
+      // Check if Shopify token is available for preview
+      if (!credentialsManager.validateShopifyToken()) {
+        return res.status(400).json({ error: 'Shopify credentials not configured' });
+      }
+
       const result = insertExtractionSchema.safeParse(req.body);
       if (!result.success) {
         return res.status(400).json({ error: 'Invalid extraction parameters' });
@@ -165,16 +133,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 // Background processing function
 async function processExtraction(extractionId: string) {
+  const credentialsManager = CredentialsManager.getInstance();
+  
   try {
     const extraction = await storage.getExtraction(extractionId);
     if (!extraction) return;
 
-    // Get credentials
-    const credentials = await storage.getActiveCredentials();
-    if (!credentials) {
+    // Get Google credentials from file
+    const googleCredentials = credentialsManager.getGoogleCredentials();
+    if (!googleCredentials) {
       await storage.updateExtraction(extractionId, {
         status: 'failed',
-        errorMessage: 'No Google credentials configured'
+        errorMessage: 'Google credentials file not found or invalid'
       });
       return;
     }
@@ -183,7 +153,7 @@ async function processExtraction(extractionId: string) {
     const checkouts = await extractAbandonedCheckouts(extraction.startDate, extraction.endDate);
     
     // Export to Google Sheets
-    const sheetsService = new GoogleSheetsService(credentials.credentialsJson as any);
+    const sheetsService = new GoogleSheetsService(googleCredentials);
     const sheetUrl = await sheetsService.exportCheckouts(checkouts, extraction.sheetName || undefined);
 
     // Update extraction with results
