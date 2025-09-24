@@ -152,9 +152,9 @@ async function processExtraction(extractionId: string) {
     // Extract data from Shopify
     const checkouts = await extractAbandonedCheckouts(extraction.startDate, extraction.endDate);
     
-    // Export to Google Sheets
+    // Export to Google Sheets using existing sheet ID
     const sheetsService = new GoogleSheetsService(googleCredentials);
-    const sheetUrl = await sheetsService.exportCheckouts(checkouts, extraction.sheetName || undefined);
+    const sheetUrl = await sheetsService.exportCheckoutsToExistingSheet(checkouts, extraction.sheetId, extraction.sheetName || undefined);
 
     // Update extraction with results
     await storage.updateExtraction(extractionId, {

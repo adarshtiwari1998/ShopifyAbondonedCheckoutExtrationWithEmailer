@@ -16,6 +16,7 @@ import DateRangePicker from "./date-range-picker";
 const formSchema = z.object({
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
+  sheetId: z.string().min(1, "Sheet ID is required"),
   sheetName: z.string().optional(),
   recordLimit: z.string().default("1000"),
   includeCustomerInfo: z.boolean().default(true),
@@ -45,6 +46,7 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
     defaultValues: {
       startDate: "2025-09-01",
       endDate: "2025-09-30",
+      sheetId: "",
       sheetName: "",
       recordLimit: "1000",
       includeCustomerInfo: true,
@@ -59,6 +61,7 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
       const response = await apiRequest('POST', '/api/extractions', {
         startDate: data.startDate,
         endDate: data.endDate,
+        sheetId: data.sheetId,
         sheetName: data.sheetName || null,
       });
       return response.json();
@@ -248,6 +251,25 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
               
               <FormField
                 control={form.control}
+                name="sheetId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Google Sheet ID *</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                        {...field}
+                        data-testid="input-sheet-id"
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">The ID from your Google Sheet URL (the long string between /d/ and /edit)</p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
                 name="sheetName"
                 render={({ field }) => (
                   <FormItem>
@@ -259,7 +281,7 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
                         data-testid="input-sheet-name"
                       />
                     </FormControl>
-                    <p className="text-xs text-muted-foreground">Leave empty to auto-generate sheet name with date range</p>
+                    <p className="text-xs text-muted-foreground">Leave empty to use the default sheet name</p>
                     <FormMessage />
                   </FormItem>
                 )}

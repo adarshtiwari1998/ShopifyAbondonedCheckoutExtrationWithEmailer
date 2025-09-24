@@ -86,13 +86,21 @@ export class GoogleSheetsService {
     return [headers, ...rows];
   }
 
-  async populateSheet(spreadsheetId: string, checkouts: ShopifyCheckout[]): Promise<void> {
+  async populateSheet(spreadsheetId: string, checkouts: ShopifyCheckout[], tabName?: string): Promise<void> {
     try {
       const data = this.formatCheckoutData(checkouts);
+      const range = tabName ? `${tabName}!A1` : 'A1';
       
+      // Clear existing data first
+      await this.sheets.spreadsheets.values.clear({
+        spreadsheetId,
+        range: tabName || 'Sheet1',
+      });
+      
+      // Add new data
       await this.sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: 'A1',
+        range,
         valueInputOption: 'RAW',
         requestBody: {
           values: data,
@@ -100,16 +108,22 @@ export class GoogleSheetsService {
       });
 
       // Format the header row
+      const formatRange = tabName ? {
+        sheetId: await this.getSheetIdByName(spreadsheetId, tabName),
+        startRowIndex: 0,
+        endRowIndex: 1,
+      } : {
+        startRowIndex: 0,
+        endRowIndex: 1,
+      };
+
       await this.sheets.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: {
           requests: [
             {
               repeatCell: {
-                range: {
-                  startRowIndex: 0,
-                  endRowIndex: 1,
-                },
+                range: formatRange,
                 cell: {
                   userEnteredFormat: {
                     backgroundColor: { red: 0.9, green: 0.9, blue: 0.9 },
@@ -125,6 +139,37 @@ export class GoogleSheetsService {
 
     } catch (error) {
       throw new Error(`Failed to populate sheet: ${error}`);
+    }
+  }
+
+  private async getSheetIdByName(spreadsheetId: string, sheetName: string): Promise<number> {
+    try {
+      const response = await this.sheets.spreadsheets.get({
+        spreadsheetId,
+      });
+      
+      const sheet = response.data.sheets?.find(sheet => 
+        sheet.properties?.title === sheetName
+      );
+      
+      return sheet?.properties?.sheetId || 0;
+    } catch (error) {
+      return 0; // Default to first sheet
+    }
+  }
+
+  async exportCheckoutsToExistingSheet(checkouts: ShopifyCheckout[], sheetId: string, sheetName?: string): Promise<string> {
+    try {
+      // Determine which sheet tab to use
+      const tabName = sheetName || 'Sheet1';
+      
+      // Clear existing data and populate with new data
+      await this.populateSheet(sheetId, checkouts, tabName);
+      
+      const url = `https://docs.google.com/spreadsheets/d/${sheetId}`;
+      return url;
+    } catch (error) {
+      throw new Error(`Failed to export to existing sheet: ${error}`);
     }
   }
 

@@ -13,6 +13,7 @@ export const extractions = pgTable("extractions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   startDate: text("start_date").notNull(),
   endDate: text("end_date").notNull(),
+  sheetId: text("sheet_id").notNull(),
   sheetName: text("sheet_name"),
   recordsFound: integer("records_found").default(0),
   sheetUrl: text("sheet_url"),
