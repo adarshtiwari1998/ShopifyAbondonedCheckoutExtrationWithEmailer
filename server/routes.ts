@@ -80,13 +80,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Return success if sheet ID format looks valid
-      // Don't load credentials here to avoid decoder issues
-      // Actual sheet access will be tested during the real extraction process
+      // Get Google credentials and test actual sheet access
+      const googleCredentials = credentialsManager.getGoogleCredentials();
+      if (!googleCredentials) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Google credentials not found. Please configure your service account first.' 
+        });
+      }
+
+      // Test actual sheet access using the GoogleSheetsService
+      const sheetsService = new GoogleSheetsService(googleCredentials);
+      const sheetAccess = await sheetsService.testSheetAccess(sheetId);
+
+      if (!sheetAccess.success) {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot access sheet: ${sheetAccess.error}. Make sure you've shared the sheet with your service account email: ${googleCredentials.client_email}`
+        });
+      }
+
       res.json({
         success: true,
-        message: 'Sheet ID format is valid. Access will be verified during extraction.',
-        sheetUrl: `https://docs.google.com/spreadsheets/d/${sheetId}`
+        message: 'Sheet access verified successfully!',
+        sheetName: sheetAccess.sheetName,
+        sheetUrl: `https://docs.google.com/spreadsheets/d/${sheetId}`,
+        serviceAccountEmail: googleCredentials.client_email
       });
     } catch (error) {
       res.status(500).json({ 
