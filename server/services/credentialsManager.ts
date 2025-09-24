@@ -86,18 +86,44 @@ export class CredentialsManager {
   }
 
   fixPrivateKeyFormat(privateKey: string): string {
+    // Handle different private key formats that might come from environment variables
+    let fixedKey = privateKey;
+    
     // Replace escaped newlines with actual newlines
-    let fixedKey = privateKey.replace(/\\n/g, '\n');
-    
-    // Ensure proper formatting around the key markers
-    if (!fixedKey.startsWith('-----BEGIN PRIVATE KEY-----\n')) {
-      fixedKey = fixedKey.replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n');
-    }
-    if (!fixedKey.endsWith('\n-----END PRIVATE KEY-----')) {
-      fixedKey = fixedKey.replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----');
+    if (fixedKey.includes('\\n')) {
+      fixedKey = fixedKey.replace(/\\n/g, '\n');
     }
     
-    return fixedKey;
+    // Remove any existing newlines and start fresh
+    fixedKey = fixedKey.replace(/\n/g, '');
+    
+    // Remove the BEGIN and END markers temporarily to extract the actual key content
+    const beginMarker = '-----BEGIN PRIVATE KEY-----';
+    const endMarker = '-----END PRIVATE KEY-----';
+    
+    let keyContent = fixedKey;
+    if (fixedKey.includes(beginMarker)) {
+      keyContent = keyContent.replace(beginMarker, '');
+    }
+    if (fixedKey.includes(endMarker)) {
+      keyContent = keyContent.replace(endMarker, '');
+    }
+    
+    // Clean up any remaining spaces or special characters
+    keyContent = keyContent.trim();
+    
+    // Reconstruct the private key with proper formatting
+    const lines = [];
+    lines.push(beginMarker);
+    
+    // Split the key content into 64-character lines
+    for (let i = 0; i < keyContent.length; i += 64) {
+      lines.push(keyContent.substring(i, i + 64));
+    }
+    
+    lines.push(endMarker);
+    
+    return lines.join('\n');
   }
 
   getGoogleCredentials(): GoogleCredentialsJson | null {
@@ -139,7 +165,8 @@ export class CredentialsManager {
         }
       }
 
-      // Return credentials as-is, no normalization
+      // Return credentials as-is without any private key formatting
+      // The Google API library will handle private key format internally
       return credentials;
     } catch (error) {
       console.error('Error loading Google credentials:', error);
