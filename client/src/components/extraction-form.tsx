@@ -11,11 +11,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import DateRangePicker from "./date-range-picker";
 
 const formSchema = z.object({
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
+  selectedDates: z.array(z.string()).optional(),
+  useCustomDates: z.boolean().default(false),
   sheetId: z.string().min(1, "Sheet ID is required"),
   sheetName: z.string().optional(),
   recordLimit: z.string().default("1000"),
@@ -83,12 +86,15 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
     shopify: 'idle', 
     sheet: 'idle'
   });
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       startDate: "2025-09-01",
       endDate: "2025-09-30",
+      selectedDates: [],
+      useCustomDates: false,
       sheetId: "",
       sheetName: "",
       recordLimit: "1000",
@@ -289,80 +295,86 @@ export default function ExtractionForm({ credentialsStatus, onExtractionStart, o
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Date Range Selection */}
             <div className="space-y-4">
-              <h3 className="font-medium text-foreground flex items-center">
-                <i className="fas fa-calendar-alt text-primary mr-2"></i>
-                Date Range
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-foreground flex items-center">
+                  <i className="fas fa-calendar-alt text-primary mr-2"></i>
+                  Date Selection
+                </h3>
                 <FormField
                   control={form.control}
-                  name="startDate"
+                  name="useCustomDates"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start Date</FormLabel>
+                    <FormItem className="flex items-center space-x-2">
+                      <FormLabel className="text-sm font-normal">Custom Date Selection</FormLabel>
                       <FormControl>
-                        <div className="relative">
-                          <Input 
-                            type="date" 
-                            {...field}
-                            data-testid="input-start-date"
-                            className="pr-10"
-                          />
-                          <i className="fas fa-calendar-alt absolute right-3 top-2.5 text-muted-foreground pointer-events-none"></i>
-                        </div>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-custom-dates"
+                        />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="endDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End Date</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Input 
-                            type="date" 
-                            {...field}
-                            data-testid="input-end-date"
-                            className="pr-10"
-                          />
-                          <i className="fas fa-calendar-alt absolute right-3 top-2.5 text-muted-foreground pointer-events-none"></i>
-                        </div>
-                      </FormControl>
-                      <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
 
-              {/* Quick Date Presets */}
-              <div className="space-y-2">
-                <FormLabel>Quick Presets</FormLabel>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { key: 'thisMonth', label: 'This Month' },
-                    { key: 'lastMonth', label: 'Last Month' },
-                    { key: 'last30Days', label: 'Last 30 Days' },
-                    { key: 'last90Days', label: 'Last 90 Days' },
-                  ].map((preset) => (
-                    <Button
-                      key={preset.key}
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setDatePreset(preset.key)}
-                      data-testid={`button-preset-${preset.key}`}
-                    >
-                      {preset.label}
-                    </Button>
-                  ))}
+              {form.watch('useCustomDates') ? (
+                /* Custom Multi-Date Selection */
+                <div className="space-y-4">
+                  <div className="p-4 border border-border rounded-lg bg-muted/10">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Select specific dates from different months (e.g., Aug 18-19 and Sep 14-15)
+                    </p>
+                    <DateRangePicker
+                      startDate={form.watch('startDate')}
+                      endDate={form.watch('endDate')}
+                      onStartDateChange={(date) => form.setValue('startDate', date)}
+                      onEndDateChange={(date) => form.setValue('endDate', date)}
+                      useMultiSelect={true}
+                      selectedDates={selectedDates}
+                      onSelectedDatesChange={(dates) => {
+                        setSelectedDates(dates);
+                        form.setValue('selectedDates', dates);
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* Traditional Date Range Selection */
+                <>
+                  <DateRangePicker
+                    startDate={form.watch('startDate')}
+                    endDate={form.watch('endDate')}
+                    onStartDateChange={(date) => form.setValue('startDate', date)}
+                    onEndDateChange={(date) => form.setValue('endDate', date)}
+                    useMultiSelect={false}
+                  />
+
+                  {/* Quick Date Presets */}
+                  <div className="space-y-2">
+                    <FormLabel>Quick Presets</FormLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { key: 'thisMonth', label: 'This Month' },
+                        { key: 'lastMonth', label: 'Last Month' },
+                        { key: 'last30Days', label: 'Last 30 Days' },
+                        { key: 'last90Days', label: 'Last 90 Days' },
+                      ].map((preset) => (
+                        <Button
+                          key={preset.key}
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setDatePreset(preset.key)}
+                          data-testid={`button-preset-${preset.key}`}
+                        >
+                          {preset.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Google Sheets Configuration */}
