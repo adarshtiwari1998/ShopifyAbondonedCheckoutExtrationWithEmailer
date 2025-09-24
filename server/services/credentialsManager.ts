@@ -39,11 +39,20 @@ export class CredentialsManager {
   validateGoogleCredentials(): boolean {
     try {
       if (!fs.existsSync(this.googleCredentialsPath)) {
+        console.error('Google credentials file does not exist');
         return false;
       }
 
       const credentialsContent = fs.readFileSync(this.googleCredentialsPath, 'utf8');
-      const credentials = JSON.parse(credentialsContent);
+      console.log('Credentials file content length:', credentialsContent.length);
+      
+      let credentials;
+      try {
+        credentials = JSON.parse(credentialsContent);
+      } catch (parseError) {
+        console.error('Failed to parse Google credentials JSON:', parseError);
+        return false;
+      }
 
       // Validate required fields
       const requiredFields = ['type', 'project_id', 'private_key', 'client_email'];
@@ -54,6 +63,21 @@ export class CredentialsManager {
         }
       }
 
+      // Validate private key format
+      if (!credentials.private_key.includes('-----BEGIN PRIVATE KEY-----') || 
+          !credentials.private_key.includes('-----END PRIVATE KEY-----')) {
+        console.error('Invalid private key format: missing BEGIN/END markers');
+        return false;
+      }
+
+      // Check for common private key issues
+      const privateKey = credentials.private_key;
+      if (privateKey.includes('\\n')) {
+        console.error('Private key contains escaped newlines (\\\\n) - needs proper formatting');
+        return false;
+      }
+
+      console.log('Google credentials validation passed');
       return true;
     } catch (error) {
       console.error('Error validating Google credentials:', error);
@@ -61,14 +85,58 @@ export class CredentialsManager {
     }
   }
 
+  fixPrivateKeyFormat(privateKey: string): string {
+    // Replace escaped newlines with actual newlines
+    let fixedKey = privateKey.replace(/\\n/g, '\n');
+    
+    // Ensure proper formatting around the key markers
+    if (!fixedKey.startsWith('-----BEGIN PRIVATE KEY-----\n')) {
+      fixedKey = fixedKey.replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n');
+    }
+    if (!fixedKey.endsWith('\n-----END PRIVATE KEY-----')) {
+      fixedKey = fixedKey.replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----');
+    }
+    
+    return fixedKey;
+  }
+
   getGoogleCredentials(): GoogleCredentialsJson | null {
     try {
-      if (!this.validateGoogleCredentials()) {
+      if (!fs.existsSync(this.googleCredentialsPath)) {
+        console.error('Google credentials file does not exist');
         return null;
       }
 
       const credentialsContent = fs.readFileSync(this.googleCredentialsPath, 'utf8');
-      return JSON.parse(credentialsContent);
+      let credentials;
+      
+      try {
+        credentials = JSON.parse(credentialsContent);
+      } catch (parseError) {
+        console.error('Failed to parse Google credentials JSON:', parseError);
+        return null;
+      }
+
+      // Validate required fields
+      const requiredFields = ['type', 'project_id', 'private_key', 'client_email'];
+      for (const field of requiredFields) {
+        if (!credentials[field]) {
+          console.error(`Invalid Google credentials: missing ${field}`);
+          return null;
+        }
+      }
+
+      // Fix private key format if needed
+      if (credentials.private_key.includes('\\n')) {
+        console.log('Fixing private key format...');
+        credentials.private_key = this.fixPrivateKeyFormat(credentials.private_key);
+        
+        // Save the fixed credentials back to file
+        fs.writeFileSync(this.googleCredentialsPath, JSON.stringify(credentials, null, 2));
+        console.log('Private key format fixed and saved');
+      }
+      
+      return credentials;
     } catch (error) {
       console.error('Error loading Google credentials:', error);
       return null;
