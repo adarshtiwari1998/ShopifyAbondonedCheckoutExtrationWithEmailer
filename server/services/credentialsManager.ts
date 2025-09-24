@@ -59,6 +59,7 @@ export class CredentialsManager {
 
       console.log(`Credentials ${source} content length:`, credentialsContent.length);
       
+      // Just check if it's valid JSON and has basic required fields
       let credentials;
       try {
         credentials = JSON.parse(credentialsContent);
@@ -67,26 +68,13 @@ export class CredentialsManager {
         return false;
       }
 
-      // Validate required fields
+      // Only check if basic required fields exist (no validation of content)
       const requiredFields = ['type', 'project_id', 'private_key', 'client_email'];
       for (const field of requiredFields) {
         if (!credentials[field]) {
           console.error(`Invalid Google credentials: missing ${field}`);
           return false;
         }
-      }
-
-      // Normalize private key before validation
-      let privateKey = credentials.private_key;
-      if (privateKey.includes('\\n')) {
-        privateKey = this.fixPrivateKeyFormat(privateKey);
-      }
-
-      // Validate private key format
-      if (!privateKey.includes('-----BEGIN PRIVATE KEY-----') || 
-          !privateKey.includes('-----END PRIVATE KEY-----')) {
-        console.error('Invalid private key format: missing BEGIN/END markers');
-        return false;
       }
 
       console.log('Google credentials validation passed');
@@ -119,12 +107,10 @@ export class CredentialsManager {
       
       let credentialsContent: string;
       let source: string;
-      let fromEnv = false;
 
       if (envCredentials) {
         credentialsContent = envCredentials;
         source = 'environment variable';
-        fromEnv = true;
         console.log('Loading Google credentials from environment variable');
       } else if (fs.existsSync(this.googleCredentialsPath)) {
         credentialsContent = fs.readFileSync(this.googleCredentialsPath, 'utf8');
@@ -144,7 +130,7 @@ export class CredentialsManager {
         return null;
       }
 
-      // Validate required fields
+      // Only validate required fields exist (no content validation)
       const requiredFields = ['type', 'project_id', 'private_key', 'client_email'];
       for (const field of requiredFields) {
         if (!credentials[field]) {
@@ -153,12 +139,7 @@ export class CredentialsManager {
         }
       }
 
-      // Normalize private key format consistently for all sources
-      if (fromEnv || credentials.private_key.includes('\\n')) {
-        console.log('Normalizing private key format for proper parsing');
-        credentials.private_key = this.fixPrivateKeyFormat(credentials.private_key);
-      }
-      
+      // Return credentials as-is, no normalization
       return credentials;
     } catch (error) {
       console.error('Error loading Google credentials:', error);
