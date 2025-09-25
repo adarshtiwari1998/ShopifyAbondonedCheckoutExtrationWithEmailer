@@ -157,28 +157,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Enhanced CAPTCHA verification function
-  async function verifyCaptcha(response: string, type: string = 'mock', validation: any): Promise<boolean> {
-    // In production, replace this with actual CAPTCHA service verification
-    // Example for Google reCAPTCHA:
-    // const verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
-    // const secret = process.env.RECAPTCHA_SECRET_KEY;
-    // const verifyResponse = await fetch(verifyUrl, { ... });
-    
-    // Enhanced demo validation (more secure than just length check)
-    if (type === 'mock') {
-      // Check multiple criteria for demo CAPTCHA
-      const hasValidFormat = response.startsWith('mock-captcha-response-');
-      const hasValidTimestamp = response.includes(Date.now().toString().substring(0, 8)); // Check if recent
-      const hasValidLength = response.length >= 20 && response.length <= 100;
+  // Real Google reCAPTCHA verification function
+  async function verifyCaptcha(response: string, type: string = 'recaptcha', validation: any): Promise<boolean> {
+    // Handle Google reCAPTCHA verification
+    if (type === 'recaptcha' || type === 'google') {
+      const secretKey = process.env.RECAPTCHA_SECRET_KEY;
       
-      // Add some randomness to simulate real CAPTCHA failure rates
-      const randomSuccess = Math.random() > 0.05; // 5% failure rate for demo
-      
-      return hasValidFormat && hasValidLength && randomSuccess;
+      if (!secretKey) {
+        console.error('RECAPTCHA_SECRET_KEY not configured');
+        return false;
+      }
+
+      if (!response) {
+        console.error('reCAPTCHA response token missing');
+        return false;
+      }
+
+      try {
+        const verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
+        const verifyResponse = await fetch(verifyUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            secret: secretKey,
+            response: response,
+            remoteip: validation.ipAddress || '' // optional
+          }).toString()
+        });
+
+        const result = await verifyResponse.json();
+        
+        if (result.success) {
+          // For reCAPTCHA v3, check score threshold (0.5 is a common threshold)
+          if (result.score !== undefined) {
+            const threshold = 0.5;
+            return result.score >= threshold;
+          }
+          // For reCAPTCHA v2, just check success
+          return true;
+        } else {
+          console.error('reCAPTCHA verification failed:', result['error-codes']);
+          return false;
+        }
+      } catch (error) {
+        console.error('reCAPTCHA verification error:', error);
+        return false;
+      }
     }
     
-    // For other CAPTCHA types, implement actual verification
+    // Fallback for demo/mock CAPTCHA (for testing when reCAPTCHA keys aren't set)
+    if (type === 'mock') {
+      const hasValidFormat = response.startsWith('mock-captcha-response-');
+      const hasValidLength = response.length >= 20 && response.length <= 100;
+      return hasValidFormat && hasValidLength;
+    }
+    
     return false;
   }
 
