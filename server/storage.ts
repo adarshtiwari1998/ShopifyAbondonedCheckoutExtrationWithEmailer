@@ -1,5 +1,7 @@
-import { type User, type InsertUser, type Extraction, type InsertExtraction, type GoogleCredentials, type InsertCredentials, type UserValidation, type InsertUserValidation, type IpGeolocation, type InsertIpGeolocation, type ValidationSettings, type InsertValidationSettings } from "@shared/schema";
+import { type User, type InsertUser, type Extraction, type InsertExtraction, type GoogleCredentials, type InsertCredentials, type UserValidation, type InsertUserValidation, type IpGeolocation, type InsertIpGeolocation, type ValidationSettings, type InsertValidationSettings, users, extractions, googleCredentials, userValidations, ipGeolocations, validationSettings } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { db } from "./db.js";
+import { eq, gte, lte, and, desc } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -33,155 +35,148 @@ export interface IStorage {
   getAllValidationSettings(): Promise<ValidationSettings[]>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private extractions: Map<string, Extraction>;
-  private credentials: Map<string, GoogleCredentials>;
-  private userValidations: Map<string, UserValidation>;
-  private ipGeolocations: Map<string, IpGeolocation>;
-  private validationSettings: Map<string, ValidationSettings>;
-
-  constructor() {
-    this.users = new Map();
-    this.extractions = new Map();
-    this.credentials = new Map();
-    this.userValidations = new Map();
-    this.ipGeolocations = new Map();
-    this.validationSettings = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async createExtraction(insertExtraction: InsertExtraction): Promise<Extraction> {
-    const id = randomUUID();
-    const extraction: Extraction = {
+    const [extraction] = await db.insert(extractions).values({
       ...insertExtraction,
-      id,
       status: "pending",
       recordsFound: 0,
-      createdAt: new Date(),
-      completedAt: null,
-      errorMessage: null,
-      extractionData: null,
-      sheetUrl: null,
-      sheetName: insertExtraction.sheetName || null,
-    };
-    this.extractions.set(id, extraction);
+    }).returning();
     return extraction;
   }
 
   async getExtraction(id: string): Promise<Extraction | undefined> {
-    return this.extractions.get(id);
+    const [extraction] = await db.select().from(extractions).where(eq(extractions.id, id));
+    return extraction || undefined;
   }
 
   async updateExtraction(id: string, updates: Partial<Extraction>): Promise<Extraction> {
-    const existing = this.extractions.get(id);
-    if (!existing) {
+    const updateData = { ...updates };
+    if (updates.status === "completed" || updates.status === "failed") {
+      updateData.completedAt = new Date();
+    }
+    
+    const [extraction] = await db
+      .update(extractions)
+      .set(updateData)
+      .where(eq(extractions.id, id))
+      .returning();
+      
+    if (!extraction) {
       throw new Error(`Extraction with id ${id} not found`);
     }
     
-    const updated: Extraction = { ...existing, ...updates };
-    if (updates.status === "completed" || updates.status === "failed") {
-      updated.completedAt = new Date();
-    }
-    
-    this.extractions.set(id, updated);
-    return updated;
+    return extraction;
   }
 
   async getExtractions(limit = 10): Promise<Extraction[]> {
-    const allExtractions = Array.from(this.extractions.values());
-    return allExtractions
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, limit);
+    return await db
+      .select()
+      .from(extractions)
+      .orderBy(desc(extractions.createdAt))
+      .limit(limit);
   }
 
   async createCredentials(insertCredentials: InsertCredentials): Promise<GoogleCredentials> {
-    const id = randomUUID();
-    
     // Deactivate all existing credentials
-    for (const [, creds] of this.credentials.entries()) {
-      creds.isActive = false;
-    }
+    await db.update(googleCredentials).set({ isActive: false });
     
-    const credentials: GoogleCredentials = {
-      ...insertCredentials,
-      id,
-      isActive: true,
-      createdAt: new Date(),
-    };
+    const [credentials] = await db
+      .insert(googleCredentials)
+      .values({ ...insertCredentials, isActive: true })
+      .returning();
     
-    this.credentials.set(id, credentials);
     return credentials;
   }
 
   async getActiveCredentials(): Promise<GoogleCredentials | undefined> {
-    return Array.from(this.credentials.values()).find(creds => creds.isActive);
+    const [credentials] = await db
+      .select()
+      .from(googleCredentials)
+      .where(eq(googleCredentials.isActive, true));
+    
+    return credentials || undefined;
   }
 
   async updateCredentialsStatus(id: string, isActive: boolean): Promise<void> {
-    const creds = this.credentials.get(id);
-    if (creds) {
-      creds.isActive = isActive;
-    }
+    await db
+      .update(googleCredentials)
+      .set({ isActive })
+      .where(eq(googleCredentials.id, id));
   }
 
   // User validation methods
   async createUserValidation(insertValidation: InsertUserValidation): Promise<UserValidation> {
-    const id = randomUUID();
-    const validation: UserValidation = {
-      ...insertValidation,
-      id,
-      createdAt: new Date(),
-    };
-    this.userValidations.set(id, validation);
+    const [validation] = await db
+      .insert(userValidations)
+      .values(insertValidation)
+      .returning();
+    
     return validation;
   }
 
   async getUserValidation(id: string): Promise<UserValidation | undefined> {
-    return this.userValidations.get(id);
+    const [validation] = await db
+      .select()
+      .from(userValidations)
+      .where(eq(userValidations.id, id));
+    
+    return validation || undefined;
   }
 
   async getUserValidationsBySession(sessionId: string): Promise<UserValidation[]> {
-    return Array.from(this.userValidations.values()).filter(
-      validation => validation.sessionId === sessionId
-    );
+    return await db
+      .select()
+      .from(userValidations)
+      .where(eq(userValidations.sessionId, sessionId))
+      .orderBy(desc(userValidations.createdAt));
   }
 
   async updateUserValidation(id: string, updates: Partial<UserValidation>): Promise<UserValidation> {
-    const existing = this.userValidations.get(id);
-    if (!existing) {
+    const [validation] = await db
+      .update(userValidations)
+      .set(updates)
+      .where(eq(userValidations.id, id))
+      .returning();
+      
+    if (!validation) {
       throw new Error(`User validation with id ${id} not found`);
     }
     
-    const updated: UserValidation = { ...existing, ...updates };
-    this.userValidations.set(id, updated);
-    return updated;
+    return validation;
   }
 
   async getValidationsByDateRange(startDate: Date, endDate: Date): Promise<UserValidation[]> {
-    return Array.from(this.userValidations.values()).filter(
-      validation => validation.createdAt >= startDate && validation.createdAt <= endDate
-    );
+    return await db
+      .select()
+      .from(userValidations)
+      .where(
+        and(
+          gte(userValidations.createdAt, startDate),
+          lte(userValidations.createdAt, endDate)
+        )
+      )
+      .orderBy(desc(userValidations.createdAt));
   }
 
   async getValidationStats(): Promise<{ total: number; passed: number; failed: number; botCount: number; }> {
-    const allValidations = Array.from(this.userValidations.values());
+    const allValidations = await db.select().from(userValidations);
+    
     return {
       total: allValidations.length,
       passed: allValidations.filter(v => v.validationResult === 'passed').length,
@@ -192,63 +187,75 @@ export class MemStorage implements IStorage {
 
   // IP Geolocation methods
   async createOrUpdateIpGeolocation(ipData: InsertIpGeolocation): Promise<IpGeolocation> {
-    const existing = this.ipGeolocations.get(ipData.ipAddress);
+    const [existing] = await db
+      .select()
+      .from(ipGeolocations)
+      .where(eq(ipGeolocations.ipAddress, ipData.ipAddress));
     
     if (existing) {
-      const updated: IpGeolocation = {
-        ...existing,
-        ...ipData,
-        lastUpdated: new Date(),
-      };
-      this.ipGeolocations.set(ipData.ipAddress, updated);
+      const [updated] = await db
+        .update(ipGeolocations)
+        .set({ ...ipData, lastUpdated: new Date() })
+        .where(eq(ipGeolocations.ipAddress, ipData.ipAddress))
+        .returning();
+      
       return updated;
     } else {
-      const id = randomUUID();
-      const geolocation: IpGeolocation = {
-        ...ipData,
-        id,
-        lastUpdated: new Date(),
-      };
-      this.ipGeolocations.set(ipData.ipAddress, geolocation);
+      const [geolocation] = await db
+        .insert(ipGeolocations)
+        .values(ipData)
+        .returning();
+      
       return geolocation;
     }
   }
 
   async getIpGeolocation(ipAddress: string): Promise<IpGeolocation | undefined> {
-    return this.ipGeolocations.get(ipAddress);
+    const [geolocation] = await db
+      .select()
+      .from(ipGeolocations)
+      .where(eq(ipGeolocations.ipAddress, ipAddress));
+    
+    return geolocation || undefined;
   }
 
   // Validation settings methods
   async createOrUpdateValidationSetting(setting: InsertValidationSettings): Promise<ValidationSettings> {
-    const existing = this.validationSettings.get(setting.settingKey);
+    const [existing] = await db
+      .select()
+      .from(validationSettings)
+      .where(eq(validationSettings.settingKey, setting.settingKey));
     
     if (existing) {
-      const updated: ValidationSettings = {
-        ...existing,
-        ...setting,
-        updatedAt: new Date(),
-      };
-      this.validationSettings.set(setting.settingKey, updated);
+      const [updated] = await db
+        .update(validationSettings)
+        .set({ ...setting, updatedAt: new Date() })
+        .where(eq(validationSettings.settingKey, setting.settingKey))
+        .returning();
+      
       return updated;
     } else {
-      const id = randomUUID();
-      const validationSetting: ValidationSettings = {
-        ...setting,
-        id,
-        updatedAt: new Date(),
-      };
-      this.validationSettings.set(setting.settingKey, validationSetting);
+      const [validationSetting] = await db
+        .insert(validationSettings)
+        .values(setting)
+        .returning();
+      
       return validationSetting;
     }
   }
 
   async getValidationSetting(key: string): Promise<ValidationSettings | undefined> {
-    return this.validationSettings.get(key);
+    const [setting] = await db
+      .select()
+      .from(validationSettings)
+      .where(eq(validationSettings.settingKey, key));
+    
+    return setting || undefined;
   }
 
   async getAllValidationSettings(): Promise<ValidationSettings[]> {
-    return Array.from(this.validationSettings.values());
+    return await db.select().from(validationSettings);
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
