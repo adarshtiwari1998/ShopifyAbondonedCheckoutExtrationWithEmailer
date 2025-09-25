@@ -1,8 +1,8 @@
 <!-- INTEGRATED SHOPIFY CART VALIDATION WITH REAL GOOGLE reCAPTCHA -->
 <!-- This combines your existing $100 validation with real Google reCAPTCHA validation -->
 
-<!-- Load Google reCAPTCHA Enterprise API -->
-<script src="https://www.google.com/recaptcha/enterprise.js?render=6Lc0n9QrATFkmu2" async defer></script>
+<!-- Load Google reCAPTCHA Enterprise API (site key will be loaded dynamically) -->
+<script id="recaptcha-script"></script>
 
 <!-- Enhanced Validation Modal with Real reCAPTCHA Integration -->
 <div id="flsvalidation-modal" class="flsvalidation-modal-overlay" style="display: none;">
@@ -393,11 +393,12 @@
 <!-- Integrated JavaScript for Cart Validation + CAPTCHA -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  // Configuration
-  const CONFIG = {
+  // Configuration (will be loaded dynamically from server)
+  let CONFIG = {
     API_BASE_URL: 'https://e54fff5c-6607-420f-93c6-d3b0d5c4a802-00-3dqfuwn1ssai0.sisko.replit.dev/api/validation',
     MINIMUM_CART_VALUE: {{ minimum_order_value }}, // Use your Shopify variable
-    DEBUG_MODE: true
+    DEBUG_MODE: true,
+    SITE_KEY: null // Will be loaded securely from server
   };
 
   // State management
@@ -438,16 +439,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Global variables for reCAPTCHA Enterprise
   window.flsvalidationRecaptchaResponse = null;
-  const RECAPTCHA_SITE_KEY = '6Lc0n9QrATFkmu2'; // Your Enterprise site key
+  let RECAPTCHA_SITE_KEY = null; // Will be loaded securely from server
 
   // Initialize the system
   init();
 
-  function init() {
+  async function init() {
+    // Load configuration securely from server
+    await loadConfiguration();
     setupQuantityMonitoring();
     setupEventListeners();
     if (CONFIG.DEBUG_MODE) {
       console.log('[Cart Validation] Initialized with session:', state.sessionId);
+    }
+  }
+
+  async function loadConfiguration() {
+    try {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/config`, {
+        method: 'GET',
+        credentials: 'omit' // Don't send cookies for config request
+      });
+      
+      if (response.ok) {
+        const config = await response.json();
+        RECAPTCHA_SITE_KEY = config.siteKey;
+        CONFIG.SITE_KEY = config.siteKey;
+        
+        // Load reCAPTCHA Enterprise script with the correct site key
+        if (RECAPTCHA_SITE_KEY) {
+          const script = document.createElement('script');
+          script.src = `https://www.google.com/recaptcha/enterprise.js?render=${RECAPTCHA_SITE_KEY}`;
+          script.async = true;
+          script.defer = true;
+          document.head.appendChild(script);
+          
+          if (CONFIG.DEBUG_MODE) {
+            console.log('[Cart Validation] reCAPTCHA Enterprise script loaded');
+          }
+        }
+      } else {
+        console.warn('[Cart Validation] Could not load secure configuration, using fallback');
+      }
+    } catch (error) {
+      console.error('[Cart Validation] Configuration load error:', error);
     }
   }
 

@@ -180,7 +180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const requestBody = {
           event: {
             token: response,
-            siteKey: '6Lc0n9QrATFkmu2', // Your Enterprise site key
+            siteKey: process.env.RECAPTCHA_SITE_KEY,
             userAgent: validation.userAgent || '',
             userIpAddress: validation.ipAddress || '',
             expectedAction: 'checkout_validation'
@@ -290,6 +290,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Stats error:', error);
       res.status(500).json({ error: 'Failed to get validation stats' });
+    }
+  });
+
+  // Get reCAPTCHA site key (only for allowed domains with strict validation)
+  app.get('/api/validation/config', async (req, res) => {
+    try {
+      const origin = req.get('Origin');
+      const referer = req.get('Referer');
+      
+      // Strict host validation - parse URLs and compare exact hostnames
+      const allowedHosts = [
+        'foxxlifesciences.com',
+        'www.foxxlifesciences.com', 
+        'shopfls.myshopify.com'
+      ];
+      
+      let isValidRequest = false;
+      
+      // Validate Origin header with strict host matching
+      if (origin) {
+        try {
+          const originUrl = new URL(origin);
+          isValidRequest = allowedHosts.includes(originUrl.hostname.toLowerCase());
+        } catch (e) {
+          console.warn('Invalid Origin URL:', origin);
+        }
+      }
+      
+      // If Origin check failed, try Referer with strict host matching
+      if (!isValidRequest && referer) {
+        try {
+          const refererUrl = new URL(referer);
+          isValidRequest = allowedHosts.includes(refererUrl.hostname.toLowerCase());
+        } catch (e) {
+          console.warn('Invalid Referer URL:', referer);
+        }
+      }
+      
+      // Require at least one valid header - reject if both are missing
+      if (!origin && !referer) {
+        console.warn('Config request missing both Origin and Referer headers');
+        return res.status(403).json({ error: 'Access denied - missing headers' });
+      }
+      
+      if (!isValidRequest) {
+        console.warn('Config request from unauthorized domain:', { origin, referer });
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      console.log('Config request authorized for:', origin || referer);
+      res.json({
+        siteKey: process.env.RECAPTCHA_SITE_KEY,
+        apiBaseUrl: `https://${req.get('host')}/api/validation`
+      });
+    } catch (error) {
+      console.error('Config error:', error);
+      res.status(500).json({ error: 'Failed to get configuration' });
     }
   });
 
