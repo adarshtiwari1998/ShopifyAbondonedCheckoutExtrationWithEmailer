@@ -606,14 +606,9 @@ document.addEventListener('DOMContentLoaded', function() {
       if (result.blocked) {
         showValidationStatus('error', '🚫 Access Denied', 
           'Your request has been blocked due to security concerns. Please contact support if you believe this is an error.');
-      } else if (result.requiresCaptcha) {
-        showCaptchaValidation(result);
       } else if (result.isValid) {
-        showValidationStatus('success', '✅ Validation Successful', 
-          `Verified from ${result.location?.city || 'Unknown'}, ${result.location?.country || 'Unknown'}. You may proceed to checkout.`);
-        setTimeout(() => {
-          proceedToShopifyCheckout();
-        }, 2000);
+        // ALWAYS show CAPTCHA verification for transparency - all users see the security process
+        showCaptchaValidation(result);
       }
 
     } catch (error) {
@@ -627,11 +622,17 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function showCaptchaValidation(result) {
-    elements.modalTitleText.textContent = 'Security Verification Required';
+    elements.modalTitleText.textContent = 'Security Verification';
     showSection('captcha');
     
-    showValidationStatus('warning', '🛡️ Security Verification Required', 
-      `Location: ${result.location?.city || 'Unknown'}, ${result.location?.country || 'Unknown'} | Risk Score: ${result.riskScore}`);
+    // Show different messaging based on risk level
+    if (result.requiresCaptcha) {
+      showValidationStatus('warning', '🛡️ Security Verification Required', 
+        `Location: ${result.location?.city || 'Unknown'}, ${result.location?.country || 'Unknown'} | Risk Score: ${result.riskScore} - Additional verification needed`);
+    } else {
+      showValidationStatus('loading', '🔐 Completing Security Verification', 
+        `Verified from ${result.location?.city || 'Unknown'}, ${result.location?.country || 'Unknown'} - Finalizing your secure checkout`);
+    }
     
     elements.captchaContainer.style.display = 'block';
     elements.captchaSubmit.disabled = true;
