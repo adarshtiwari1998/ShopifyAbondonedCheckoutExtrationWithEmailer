@@ -1,0 +1,324 @@
+<!-- Model Logic for the custom $100 validation start -->
+ <div id="validation-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">
+        <span class="modal-icon">🛒</span>
+        Minimum Order Required
+      </h3>
+      <button class="modal-close" onclick="closeValidationModal()">&times;</button>
+    </div>
+    
+    <div class="modal-body">
+      <div class="validation-info">
+        <div class="validation-item">
+          <span class="label">Current Total:</span>
+          <span class="value current-total">{{ cart.total_price | money }}</span>
+        </div>
+        <div class="validation-item">
+          <span class="label">Required Minimum:</span>
+          <span class="value minimum-required">{{ minimum_order_value | money }}</span>
+        </div>
+        <div class="validation-item highlight">
+          <span class="label">Amount Needed:</span>
+          <span class="value amount-needed">{{ minimum_order_value | minus: cart.total_price | money }}</span>
+        </div>
+      </div>
+      
+      <div class="security-info">
+        <div class="security-badge">
+          <span class="security-icon">🔐</span>
+          <div class="security-text">
+            <p><strong>Security Notice</strong></p>
+            <p>This validation is enforced server-side and cannot be bypassed. Your cart must meet the minimum order requirement to proceed.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="continueShoppingFromModal()">
+        <span class="btn-icon">🛍️</span>
+        Continue Shopping
+      </button>
+      <button class="btn btn-secondary" onclick="closeValidationModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loading Modal -->
+<div id="loading-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-container loading-container">
+    <div class="loading-spinner"></div>
+    <p class="loading-text">Validating your cart...</p>
+    <p class="loading-subtext">Please wait while we verify your order meets our requirements.</p>
+  </div>
+</div>
+</div>
+
+
+<!-- Model Logic for the custom $100 validation start End -->
+<!-- Model Logic JavaScript for the custom $100 validation  start -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const minimumOrderValue = {{ minimum_order_value }};
+  const currentTotal = {{ cart.total_price }};
+  const checkoutButton = document.getElementById('enhanced-checkout-btn');
+  const validationModal = document.getElementById('validation-modal');
+  const loadingModal = document.getElementById('loading-modal');
+  const updateCartBtn = document.getElementById('update-cart-btn');
+  const updateCartIndicator = document.getElementById('update-cart-indicator');
+  let cartChanged = false;
+  let autoReloadTimer = null;
+
+  // Monitor quantity changes
+  function setupQuantityMonitoring() {
+    const quantityInputs = document.querySelectorAll('.quantity-input');
+
+    quantityInputs.forEach(input => {
+      const originalValue = input.dataset.originalValue;
+
+      input.addEventListener('input', function() {
+        const currentValue = this.value;
+        const hasChanged = currentValue !== originalValue;
+
+        if (hasChanged) {
+          cartChanged = true;
+          this.classList.add('changed');
+          showUpdateIndicator();
+          setupAutoReload();
+        } else {
+          this.classList.remove('changed');
+          checkIfAnyChanges();
+        }
+      });
+
+      input.addEventListener('change', function() {
+        const currentValue = this.value;
+        const hasChanged = currentValue !== originalValue;
+
+        if (hasChanged) {
+          cartChanged = true;
+          this.classList.add('changed');
+          showUpdateIndicator();
+          setupAutoReload();
+        }
+      });
+    });
+  }
+
+  function checkIfAnyChanges() {
+    const changedInputs = document.querySelectorAll('.quantity-input.changed');
+    if (changedInputs.length === 0) {
+      cartChanged = false;
+      hideUpdateIndicator();
+      clearAutoReload();
+    }
+  }
+
+  function showUpdateIndicator() {
+    if (updateCartBtn) {
+      updateCartBtn.classList.add('cart-changed');
+    }
+    if (updateCartIndicator) {
+      updateCartIndicator.style.display = 'block';
+    }
+  }
+
+  function hideUpdateIndicator() {
+    if (updateCartBtn) {
+      updateCartBtn.classList.remove('cart-changed');
+    }
+    if (updateCartIndicator) {
+      updateCartIndicator.style.display = 'none';
+    }
+  }
+
+  function setupAutoReload() {
+    clearAutoReload();
+    autoReloadTimer = setTimeout(() => {
+      if (cartChanged) {
+        console.log('Auto-reloading cart due to changes...');
+        document.getElementById('enhanced-cart-form').submit();
+      }
+    }, 5000); // Auto-reload after 5 seconds of inactivity
+  }
+
+  function clearAutoReload() {
+    if (autoReloadTimer) {
+      clearTimeout(autoReloadTimer);
+      autoReloadTimer = null;
+    }
+  }
+
+  // Initialize global cart validation with current values
+  if (window.CartValidation) {
+    window.CartValidation.init({
+      minimumOrderValue: minimumOrderValue,
+      currentTotal: currentTotal,
+      itemCount: {{ cart.item_count }}
+    });
+  }
+
+  // Security token generation
+  function generateSecurityToken() {
+    const timestamp = Date.now();
+    const cartData = {
+      total: currentTotal,
+      items: {{ cart.item_count }},
+      session: document.getElementById('cart-session-id').value
+    };
+    return btoa(JSON.stringify({ ...cartData, timestamp }));
+  }
+
+  // Enhanced checkout validation
+  function validateAndProceedToCheckout() {
+    // Show loading modal
+    showLoadingModal();
+
+    // Simulate server-side validation delay
+    setTimeout(() => {
+      hideLoadingModal();
+
+      // Multi-layer validation
+      const validationChecks = [
+        { check: currentTotal >= minimumOrderValue, message: 'Minimum order value not met' },
+        { check: {{ cart.item_count }} > 0, message: 'Cart is empty' },
+        { check: validateSecurityToken(), message: 'Security validation failed' },
+        { check: validateTimestamp(), message: 'Session expired' }
+      ];
+
+      const failedCheck = validationChecks.find(check => !check.check);
+
+      if (failedCheck) {
+        console.error('[SECURITY] Validation failed:', failedCheck.message);
+        showValidationModal();
+        return;
+      }
+
+      // If all validations pass, proceed to Shopify checkout
+      console.log('[SECURITY] All validations passed, proceeding to checkout');
+      proceedToShopifyCheckout();
+    }, 1500);
+  }
+
+  // Security token validation
+  function validateSecurityToken() {
+    const token = document.getElementById('cart-validation-token').value;
+    const expectedPattern = /^\d+-\d+-\d+$/;
+    return expectedPattern.test(token);
+  }
+
+  // Timestamp validation (prevent replay attacks)
+  function validateTimestamp() {
+    const now = Date.now();
+    const sessionStart = parseInt(document.getElementById('cart-validation-token').value.split('-')[0]) * 1000;
+    const maxSessionTime = 30 * 60 * 1000; // 30 minutes
+    return (now - sessionStart) < maxSessionTime;
+  }
+
+  // Show validation modal
+  function showValidationModal() {
+    validationModal.style.display = 'flex';
+    validationModal.classList.add('modal-enter');
+    document.body.style.overflow = 'hidden';
+
+    // Update dynamic values
+    updateModalValues();
+  }
+
+  // Update modal with current values
+  function updateModalValues() {
+    const remaining = minimumOrderValue - currentTotal;
+    document.querySelector('.amount-needed').textContent = '$' + (remaining / 100).toFixed(2);
+  }
+
+  // Show loading modal
+  function showLoadingModal() {
+    loadingModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  // Hide loading modal
+  function hideLoadingModal() {
+    loadingModal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+  }
+
+  // Proceed to Shopify checkout
+  function proceedToShopifyCheckout() {
+    // Add security parameters to checkout URL
+    const securityToken = generateSecurityToken();
+    const checkoutUrl = '/checkout';
+
+    // Log checkout attempt for security monitoring
+    console.log('[SECURITY] Checkout initiated with validation token:', securityToken.slice(0, 20) + '...');
+
+    // Redirect to Shopify checkout
+    window.location.href = checkoutUrl;
+  }
+
+  // Event listeners
+  if (checkoutButton) {
+    checkoutButton.addEventListener('click', function(event) {
+      event.preventDefault();
+
+      if (currentTotal < minimumOrderValue) {
+        showValidationModal();
+      } else {
+        validateAndProceedToCheckout();
+      }
+    });
+  }
+
+  // Sticky checkout button functionality
+  const stickyCheckoutBtn = document.getElementById('sticky-checkout-btn');
+  if (stickyCheckoutBtn) {
+    stickyCheckoutBtn.addEventListener('click', function(event) {
+      event.preventDefault();
+      
+      if (currentTotal < minimumOrderValue) {
+        showValidationModal();
+      } else {
+        validateAndProceedToCheckout();
+      }
+    });
+  }
+
+  // Sticky bar is now always visible on desktop
+
+  // Global functions for modal controls
+  window.closeValidationModal = function() {
+    validationModal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+  };
+
+  window.continueShoppingFromModal = function() {
+    closeValidationModal();
+    // Optionally scroll to product recommendations or redirect to collections
+    window.location.href = '/collections/all';
+  };
+
+  // Prevent form manipulation
+  document.addEventListener('keydown', function(e) {
+    // Prevent opening developer tools with common shortcuts
+    if (e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'C' || e.key === 'J')) ||
+        (e.ctrlKey && e.key === 'U')) {
+      e.preventDefault();
+      console.warn('[SECURITY] Developer tools access attempt detected');
+    }
+  });
+
+  // Monitor for tampering attempts
+  const originalConsoleLog = console.log;
+  console.log = function(...args) {
+    if (args.some(arg => typeof arg === 'string' && arg.includes('minimum'))) {
+      console.warn('[SECURITY] Potential tampering attempt detected');
+    }
+    originalConsoleLog.apply(console, args);
+  };
+});
+</script>
+<!-- CORRECTED CART.LIQUID SCRIPT FOR $1000 THRESHOLD -->
+<!-- CORRECTED CART.LIQUID SCRIPT FOR $1000 THRESHOLD -->

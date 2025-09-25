@@ -1,0 +1,1794 @@
+  {%- include 'bold-cart' -%}
+  {% comment %} {% if request.query_string contains 'page_url=' or request.query_string contains 'promotion=breast_cancer_awareness' %}
+    <meta name="robots" content="noindex">
+  {% endif %}
+  {% if request.query_string contains 'page_url=' or request.query_string contains 'halloween-sale-offers-deals' %}
+    <meta name="robots" content="noindex">
+  {% endif %} {% endcomment %}
+
+  <!-- Global Cart Validation Styles and Scripts -->
+  <link rel="stylesheet" href="{{ 'cart-validation.css' | asset_url }}" type="text/css">
+  <script src="{{ 'cart-validation.js' | asset_url }}" defer></script>
+
+  {% comment %}
+
+    This is your /cart template. If you are using the Ajaxify Cart plugin,
+    your form (with action="/cart") layout will be used in the drawer/modal.
+
+    For info on test orders:
+      - General http://docs.shopify.com/manual/your-store/orders/test-orders
+      - Shopify Payments - http://docs.shopify.com/manual/more/shopify-payments/testing-shopify-payments
+
+  {% endcomment %}
+
+  {% if cart.item_count > 0 %}
+
+  <div id="shappify-qty-cart-msg"></div>
+  <div id="cart-container" class="cart-page">
+    <form action="/cart" method="post" novalidate class="cart" id="enhanced-cart-form">
+
+      <div class="section-header">
+        <h1 class="section-header__title">{{ 'cart.general.title' | t }}</h1>
+      </div>
+   <!-- Reusable Breast Cancer Promotional Banner Section -->
+      {% render 'breast-cancer-promotional-css' %}
+       <div class="promotional-banner">
+   <a href="/pages/us-independence-day-sale-25">
+        <img src="#"
+              alt="Our Biggest Patriotic Sale of the Year"
+                title="Our Biggest Patriotic Sale of the Year"
+              class="banner-img">
+      </a>
+  </div> 
+
+      <!-- Enhanced Validation Progress Bar -->
+      <div class="cart-validation-progress">
+        {% assign minimum_order_value = 10000 %}
+        {% assign progress_percentage = cart.total_price | times: 100 | divided_by: minimum_order_value %}
+        {% if progress_percentage > 100 %}{% assign progress_percentage = 100 %}{% endif %}
+
+        <div class="progress-container">
+          <div class="progress-header">
+            <span class="progress-label">Order Progress</span>
+            <span class="progress-amount">
+              {% if cart.total_price >= minimum_order_value %}
+                <span class="progress-complete">✓ Minimum Order Value Reached!</span>
+              {% else %}
+                {% assign remaining = minimum_order_value | minus: cart.total_price %}
+                <span class="progress-remaining">{{ remaining | money }} to go</span>
+              {% endif %}
+            </span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: {{ progress_percentage }}%"></div>
+          </div>
+          <div class="progress-info">
+            <span>Current: {{ cart.total_price | money }}</span>
+            <span>Minimum Order Value: {{ minimum_order_value | money }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Security Token (Hidden) -->
+      <input type="hidden" id="cart-validation-token" value="{{ 'now' | date: '%s' }}-{{ cart.total_price }}-{{ cart.item_count }}">
+      <input type="hidden" id="cart-session-id" value="shopify-{{ shop.permanent_domain }}-{{ customer.id | default: 'guest' }}">
+
+
+      {% if cart.announcements.size > 0 %}
+        <ul class="note">
+          {% for announcement in cart.announcements %}
+            <li>{{ announcement }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      {% if cart.errors.size > 0 %}
+        <ul class="note errors">
+          {% for error in cart.errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      <div class="cart__row medium-down--hide cart__header-labels">
+        <div class="grid--full">
+          <div class="grid__item large--one-half push--large--one-half">
+            <div class="grid--full">
+              <div class="grid__item one-third medium-down--one-third">
+                <span class="h4">{{ 'cart.label.price' | t }}</span>
+              </div>
+              <div class="grid__item one-third medium-down--one-third text-center">
+                <span class="h4">{{ 'cart.label.quantity' | t }}</span>
+              </div>
+              <div class="grid__item one-third medium-down--one-third text-right">
+                <span class="h4">{{ 'cart.label.total' | t }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% comment %}
+        Loop through products in the cart
+      {% endcomment %}
+      {% for item in cart.items %}
+  {%- include 'bold-cart-item' with item -%}
+
+  <style>
+    .red-border {
+        border: 3px solid #dc3545!important;
+        background: linear-gradient(135deg, #fff5f5 0%, #ffeaea 100%);
+        position: relative;
+        border-radius:12px;
+        padding: 15px;
+        margin-bottom:15px;
+        margin-top:15px;
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.15);
+    }
+
+    .red-border::before {
+        content: "🎆 END OF SUMMER SALE OFFER";
+        position: absolute;
+        top: -12px;
+        left: 20px;
+        background: linear-gradient(45deg, #dc3545, #0071ce);
+        color: white;
+        padding: 6px 15px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+    }
+
+    .free-gift-label {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #ffcccc;
+        color: black;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-weight: bold;
+    }
+  </style>
+
+  <style>
+
+  .cart__image {
+      display: block;
+      width: 100%;
+      text-align: center;
+      margin: 10px auto;
+  }
+
+  .cart__image-container {
+      width: 100%;  /* Fixed width for image container */
+      height: 150px; /* Fixed height for image container */
+      overflow: hidden; /* Hide the parts of the image that overflow the container */
+      margin: 0 auto; /* Center the container */
+      /* border: 2px solid #d8d9da; */
+      border-radius: 8px; 
+      /* box-shadow: 0 2px 2px rgba(0, 0, 0, 0.1);  */
+  }
+
+  .red-border .cart__image-container {
+    border: 2px solid #0071CE; /* Border color */  
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Optional shadow for a modern look */
+  }
+
+  .cart-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain; /* Scale the image to cover the container, cropping it if necessary */
+      display: block;
+  }
+
+
+  .grey-border {
+      border: 2px solid #D6D6D6; /* Adds a grey border to the left side of all elements with .grey-border class */
+      position: relative;
+      border-radius: 10px;
+      padding: 10px;
+  }
+
+
+  </style>
+  {% comment %} Collect all variant IDs from the collections used in simple-minimilistic.liquid {% endcomment %}
+  {% assign promo_variant_ids = '' %}
+
+  {% comment %} EZclear® Rectangular Carboy (PC) Collection - 32% Off {% endcomment %}
+  {% assign ezclear_carboy_collection = collections['bioprocess-components-20-off-labor-day-sale-25'] %}
+  {% for product in ezclear_carboy_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %}
+
+  {% comment %} EZBio® Carboy (PC) Collection - 20% Off {% endcomment %}
+  {% assign pc_carboy_collection = collections['bottles-20-off-labor-day-sale-25'] %}
+  {% for product in pc_carboy_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %}
+
+  {% comment %} EZBio® Titanium Round Carboy (PC) Collection - 15% Off {% endcomment %}
+  {% assign pc_tr_carboy_collection = collections['carboys-20-off-labor-day-sale-25'] %}
+  {% for product in pc_tr_carboy_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %}
+
+  {% comment %} ezbio-vactrap-s-up-to-15-off - 20% Off {% endcomment %}
+  {% assign ezbio-vactrap-s-up-to-15-off = collections['ezbio-vactrap-s-up-to-15-off'] %}
+  {% for product in ezbio-vactrap-s-up-to-15-off.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %}
+
+  {% assign ezbio-centrifuge-tube-assemblies-up-to-15-off = collections['ezbio-centrifuge-tube-assemblies-up-to-15-off'] %}
+  {% for product in ezbio-centrifuge-tube-assemblies-up-to-15-off.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %}
+
+  {% assign ezbio-mto-centrifuge-tube-assemblies-up-to-15-off = collections['ezbio-mto-centrifuge-tube-assemblies-up-to-15-off'] %}
+  {% for product in ezbio-mto-centrifuge-tube-assemblies-up-to-15-off.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %}
+
+  {% comment %} EZBio® Media bottle (PC) Collection - 12% & 10% Off {% endcomment %}
+  {% comment %} {% assign ezbio_bottles_12_collection = collections['ezbio-media-bottle-pc-12-off-us-independence-day-sale-25'] %}
+  {% for product in ezbio_bottles_12_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} {% assign ezbio_bottles_10_collection = collections['ezbio-media-bottle-pc-10-off-us-independence-day-sale-25'] %} {% endcomment %}
+  {% comment %} {% for product in ezbio_bottles_10_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} EZBio® Titanium Square Media Bottles (PETG) Collection - 12% Off {% endcomment %}
+  {% comment %} {% assign ezbio_ts_bottles_collection = collections['ezbio-titanium-square-media-bottles-petg-12-off-us-independence-day-sale-25'] %}
+  {% for product in ezbio_ts_bottles_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} EZBio® Pure PFA Bottle Collection - 40% Off {% endcomment %}
+  {% comment %} {% assign pfa_bottles_collection = collections['ezbio-pure-pfa-bottle-40-off-us-independence-day-sale-25'] %}
+  {% for product in pfa_bottles_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} CPC® AseptiQuik G Sanitary Connector Collection - 20% Off {% endcomment %}
+  {% comment %} {% assign aqg_collection = collections['cpc-aseptiquik-g-sanitary-connector-20-off-us-independence-day-sale-25'] %}
+  {% for product in aqg_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} CPC® AseptiQuik S Connector Collection - 50% Off {% endcomment %}
+  {% comment %} {% assign aqs_collection = collections['cpc-aseptiquik-s-connector-50-off-us-independence-day-sale-25'] %}
+  {% for product in aqs_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} CPC® Steam Thru Connectors Collection - 50% Off {% endcomment %}
+  {% comment %} {% assign cpc_stream_thru_connectors_collection = collections['cpc-steam-thru-connectors-50-off-us-independence-day-sale-25'] %}
+  {% for product in cpc_stream_thru_connectors_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} EZBio® Bottle Assembly (PC) Collection - 12% Off {% endcomment %}
+  {% comment %} {% assign ezbio_bottle_assembly_pc_collection = collections['ezbio-bottle-assembly-pc-12-off-us-independence-day-sale-25'] %}
+  {% for product in ezbio_bottle_assembly_pc_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} EZLabpure™ Round Carboy (PP) Collection - 25% Off {% endcomment %}
+  {% comment %} {% assign ezlabpure_carboy_collection = collections['ezlabpure-round-carboy-pp-25-off-us-independence-day-sale-25'] %}
+  {% for product in ezlabpure_carboy_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} EZgrip® Carboy (PP) Collection - 32% Off {% endcomment %}
+  {% comment %} {% assign ezgrip_carboy_collection = collections['ezgrip-carboy-pp-32-off-us-independence-day-sale-25'] %}
+  {% for product in ezgrip_carboy_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} EZBio® Carboy (PC) Lab Collection - 32% Off {% endcomment %}
+  {% comment %} {% assign ezbio_carboypc_collection = collections['ezbio-carboy-pc-lab-32-off-us-independence-day-sale-25'] %}
+  {% for product in ezbio_carboypc_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} EZBio® Carboy (PP) Lab Collection - 32% Off {% endcomment %}
+  {% comment %} {% assign ezbio_carboypp_collection = collections['ezbio-carboy-pp-lab-32-off-us-independence-day-sale-25'] %}
+  {% for product in ezbio_carboypp_collection.products %}
+    {% for variant in product.variants %}
+      {% assign promo_variant_ids = promo_variant_ids | append: variant.id | append: ',' %}
+    {% endfor %}
+  {% endfor %} {% endcomment %}
+
+  {% comment %} Convert the comma-separated string to an array for checking {% endcomment %}
+  {% assign promo_variant_ids_array = promo_variant_ids | split: ',' %}
+
+  {% comment %} Check if current item variant ID is in the promo collections {% endcomment %}
+  {% assign is_promo_item = false %}
+  {% for promo_id in promo_variant_ids_array %}
+    {% assign promo_id_num = promo_id | plus: 0 %}
+    {% if item.variant_id == promo_id_num %}
+      {% assign is_promo_item = true %}
+      {% break %}
+    {% endif %}
+  {% endfor %}
+
+  <div class="cart__row {% if is_promo_item %}red-border{% else %}grey-border{% endif %}" data-id="{{ item.id }}">
+        {% comment %} {% if item.variant_id == 46258505486 %}
+            <div class="free-gift-label">Free Gift</div>
+        {% endif %} {% endcomment %}
+          <div class="grid--full cart__row--table-large">
+
+            <div class="grid__item large--one-half">
+              <div class="grid">
+
+              <div class="grid__item one-third">
+                <a href="{{ item.url | within: collections.all }}" class="cart__image">
+                    {% comment %}
+                        More image size options at:
+                        - http://docs.shopify.com/themes/filters/product-img-url
+                    {% endcomment %}
+                    <div class="cart__image-container">
+                        <img src="{{ item | img_url: 'medium' }}" alt="{{ item.title | escape }}" class="cart-image">
+                    </div>
+                </a>
+            </div>          
+
+                <div class="grid__item two-thirds">
+                  <a href="{{ item.url }}" class="h4 cart_product_title">
+                    {{ item.product.title }}
+                  </a>
+                  {% unless item.variant.title contains 'Default' %}
+                    <br>
+                    <small>{{ item.variant.title }}</small>
+                  {% endunless %}
+
+                  {% if settings.cart_vendor_enable %}
+                    <p>{{ item.vendor }}</p>
+                  {% endif %}
+
+                  {% comment %}
+                    Optional, loop through custom product line items if available
+
+                    For more info on line item properties, visit:
+                      - http://docs.shopify.com/support/your-store/products/how-do-I-collect-additional-information-on-the-product-page-Like-for-a-monogram-engraving-or-customization
+                  {% endcomment %}
+                  {% if item.properties.size > 0 %}
+                    {% for p in item.properties %}
+                      {% unless p.last == blank %}
+                        {{ p.first }}:
+
+                        {% comment %}
+                          Check if there was an uploaded file associated
+                        {% endcomment %}
+                        {% if p.last contains '/uploads/' %}
+                          <a href="{{ p.last }}">{{ p.last | split: '/' | last }}</a>
+                        {% else %}
+                          {{ p.last }}
+                        {% endif %}
+
+                        <br>
+                      {% endunless %}
+                    {% endfor %}
+                  {% endif %}
+                  <style>
+
+                    .cart_product_title {
+                      color:#333333;
+                    }
+                    .cart_product_title:hover {
+                      color:#333333;
+                    }
+                      .cart__remove {
+                        display: flex;
+                      align-items: center;
+                        width:min-content;
+                        font-size: 14px;
+                        color: #ff8080; /* White text color for contrast */
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        text-decoration: none;
+                        transition: background-color 0.3s ease;
+                    }
+
+                    .cart__remove:hover{ 
+                      color: #ff6666; /* White text color for contrast */
+                    }
+
+                    .cart__remove svg{ 
+                    fill: #ff8080
+                    }
+
+                    .cart__remove svg:hover{  
+                      fill: #ff6666;
+                    }
+
+                  </style>
+                  <a href="/cart/change?line={{ forloop.index }}&amp;quantity=0" data-id="{{ item.id }}" class="cart__remove">
+                  <svg clip-rule="evenodd" fill-rule="evenodd"  width="14px" height="14px" stroke-linejoin="round" stroke-miterlimit="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="m4.015 5.494h-.253c-.413 0-.747-.335-.747-.747s.334-.747.747-.747h5.253v-1c0-.535.474-1 1-1h4c.526 0 1 .465 1 1v1h5.254c.412 0 .746.335.746.747s-.334.747-.746.747h-.254v15.435c0 .591-.448 1.071-1 1.071-2.873 0-11.127 0-14 0-.552 0-1-.48-1-1.071zm14.5 0h-13v15.006h13zm-4.25 2.506c-.414 0-.747.335-.747.747 0 .413.333.747.747.747.414 0 .747-.334.747-.747 0-.412-.333-.747-.747-.747zm-3.5 0c-.414 0-.747.335-.747.747 0 .413.333.747.747.747.414 0 .747-.334.747-.747 0-.412-.333-.747-.747-.747zm-3.5 0c-.414 0-.747.335-.747.747 0 .413.333.747.747.747.414 0 .747-.334.747-.747 0-.412-.333-.747-.747-.747z"/></svg>
+                  </a>
+                </div>
+
+              </div>
+            </div>
+
+            <div class="grid__item large--one-half">
+              <div class="grid--full cart__row--table-large">
+
+                <div class="grid__item one-third">
+                  <span class="cart__mini-labels">{{ 'cart.label.price' | t }}</span>
+                  <div class="price-display">
+                    {% if item.variant.compare_at_price and item.variant.compare_at_price > item.variant.price %}
+                      <span class="original-price">{{ item.variant.compare_at_price | money }}</span>
+                    {% endif %}
+                    <span class="current-price">{{ item.variant.price | money }}</span>
+                  </div>
+                </div>
+
+                <div class="grid__item one-third text-center">
+                  <span class="cart__mini-labels">{{ 'cart.label.quantity' | t }}</span>
+                  <div class="quantity-wrapper">
+                    <input type="number" name="updates[]" id="updates_{{ item.id }}" value="{{ item.quantity }}" min="0" data-id="{{ item.id }}" class="quantity-input" data-original-value="{{ item.quantity }}">
+                  </div>
+                </div>
+
+                <div class="grid__item one-third text-right">
+                  <span class="cart__mini-labels">{{ 'cart.label.total' | t }}</span>
+                  <div class="total-price-display">
+                    {% if item.original_line_price != item.line_price %}
+                      <span class="original-total">{{ item.original_line_price | money }}</span>
+                    {% endif %}
+                    <span class="current-total">{{ item.line_price | money }}</span>
+                  </div>
+                  {% if item.original_line_price != item.line_price %}
+                    {% for discount in item.discounts %}
+        <style>
+      .af_tag {
+      font-size: 14px;
+      color: #000000;
+      background-color: #DEDEDE;
+      border: solid 1px #D6D6D6;
+      padding: 5px 5px;
+      margin: 3px 0px;
+      border-radius: 5px;
+  }
+   div.af_tag {
+      background: #EFF4F7!important;
+      border-radius: 20px!important;
+  }
+
+  div.af_tag {
+      color: #222;
+      display: flex;
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      padding: 5px 10px;
+      background: #e5e5e5;
+      border: solid thin #d5d5d5;
+      border-radius: 3px!important;
+      margin-right: 5px!important;
+  }
+
+  .af_tag {
+      position: relative;
+      transition: all ease-in-out .2s;
+  }
+
+  div.af_tag .af_coupon_wrapper {
+      margin-right: 5px;
+  }
+
+  div.af_tag span.af_coupon_wrapper svg {
+      width: 15px;
+      height: 15px;
+  }
+
+  div.af_tag > * {
+      display: flex;
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+  }
+
+  #af_kd_tagged_discounts .af_coupon_text_amount {
+      line-height: 23px !important;
+  }
+
+  .af_coupon_text_amount {
+      display: grid;
+      max-height: 23px;
+      text-align: center;
+  }
+
+  div.af_tag span.af_coupon_text {
+      color: #222;
+  }
+  .af_coupon_text.af_coupon_code {
+      visibility: visible !important;
+      position: unset !important;
+  }
+
+  .af_tagged_discounts .af_tag .af_coupon_text {
+      display: inline-block;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden!important;
+  }
+
+   </style>
+
+  <div id="af_kd_tagged_discounts" class="af_tagged_discounts"><div class="af_tag "><span class="af_coupon_wrapper"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18"><path d="M17.78 3.09C17.45 2.443 16.778 2 16 2h-5.165c-.535 0-1.046.214-1.422.593l-6.82 6.89c0 .002 0 .003-.002.003-.245.253-.413.554-.5.874L.738 8.055c-.56-.953-.24-2.178.712-2.737L9.823.425C10.284.155 10.834.08 11.35.22l4.99 1.337c.755.203 1.293.814 1.44 1.533z" fill-opacity=".55"></path><path fill-opacity=".25" d="M10.835 2H16c1.105 0 2 .895 2 2v5.172c0 .53-.21 1.04-.586 1.414l-6.818 6.818c-.777.778-2.036.782-2.82.01l-5.166-5.1c-.786-.775-.794-2.04-.02-2.828.002 0 .003 0 .003-.002l6.82-6.89C9.79 2.214 10.3 2 10.835 2zM13.5 8c.828 0 1.5-.672 1.5-1.5S14.328 5 13.5 5 12 5.672 12 6.5 12.672 8 13.5 8z"></path></svg></span>
+  <div class="af_coupon_text_wrapper">
+    <div class="af_coupon_text_amount">
+      <span class="af_coupon_text af_coupon_code"><small class="cart-item__discount">{{ discount.title }}</small></span>
+      <span class="af_coupon_text af_discount_amt">-<span class="af_money" data-current-currency="INR"></span></span>
+      </div>
+      </div>
+      </div></div>
+
+                    {% endfor %}
+                  {% endif %}
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+      {% endfor %}
+
+      {% if cart.discounts.size > 0 %}
+      <div class="cart-additional-savings text-right cart__row">
+        <span class="label cart-additional-savings__label">{{ 'cart.general.additional_savings' | t }}</span>
+        <span class="h5 cart-additional-savings__price">{{ cart.discount.total_savings | money }}</span><br>
+        {% for discount in cart.discounts %}
+          <small class="cart-additional-savings__savings">{{ discount.title }}</small>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="cart__row" >
+        <div class="grid">
+          {% comment %}
+            Optional, add a textarea for special notes
+              - Your theme settings can turn this on or off. Default is on.
+              - Make sure you have name="note" for the message to be submitted properly
+          {% endcomment %}
+          {% if settings.cart_notes_enable %}
+            {% assign noteSize = cart.note | size %}
+            <div class="grid__item large--five-twelfths">
+              <button type="button" class="text-link cart__note-add{% if noteSize > 0 %} is-hidden{% endif %}">
+                {{ 'cart.label.add_note' | t }}
+              </button>
+              <div class="cart__note{% if noteSize > 0 %} is-active{% endif %}">
+                <label for="CartSpecialInstructions">{{ 'cart.general.note' | t }}</label>
+                <textarea name="note" class="input-full" id="CartSpecialInstructions">{{ cart.note }}</textarea>
+              </div>
+            </div>
+          {% endif %}
+          <div class="grid__item text-right{% if settings.cart_notes_enable %} large--seven-twelfths{% endif %}">
+            <!-- Update Cart Button with Dynamic Indicator -->
+            <div id="update-cart-container" style="margin-bottom: 15px;">
+              <input type="submit" name="update" class="btn--secondary update-cart" value="{{ 'cart.general.update' | t }}" id="update-cart-btn" style="margin-right:20px;">
+              <div id="update-cart-indicator" style="display:none;">
+                <strong>⚠ Cart Changed!</strong> Click "{{ 'cart.general.update' | t }}" to save your changes
+              </div>
+            </div>
+            <!-- Cart Summary for Desktop -->
+            <div class="cart-summary-desktop">
+              <div class="cart__total">
+                <span>Cart Total: </span>
+                {% assign totalComparePrice = 0 %}
+                {% for item in cart.items %}
+                {% assign variantComparePrice = item.variant.compare_at_price | times: item.quantity %}
+                {% assign totalComparePrice = totalComparePrice | plus: variantComparePrice %}
+                {% endfor %}
+                <span>{{ totalComparePrice | money }}</span>
+              </div>
+
+              <span class="cart__subtotal-title">{{ 'cart.general.subtotal' | t }}:</span>
+              {% assign totalSubtotalPrice = 0 %}
+              {% for item in cart.items %}
+               {% assign linePrice = item.original_line_price %}
+               {% assign totalSubtotalPrice = totalSubtotalPrice | plus: linePrice %}
+               {% endfor %}
+
+              <span id="cart__subtotal-title" class="h5 cart__subtotal">{{ totalSubtotalPrice | money }}</span><br>
+              {% assign cartTotal = 0 %}
+              {% for item in cart.items %}
+                {% assign variantComparePrice = item.variant.compare_at_price | times: item.quantity %}
+                {% assign cartTotal = cartTotal | plus: variantComparePrice %}
+              {% endfor %}
+
+              {% assign toPay = 0 %}
+              {% for item in cart.items %}
+                {% assign linePrice = item.line_price %}
+                {% assign toPay = toPay | plus: linePrice %}
+              {% endfor %}
+
+              {% assign totalDiscountAmount = cartTotal | minus: toPay %}
+
+              {% if totalDiscountAmount > 0 %}
+                <span style="color: #2f5b96;font-weight:600">Cart Discount: {{ totalDiscountAmount | money }}</span>
+              {% endif %}
+               <br>
+                {% assign totalSubtotalPrice = 0 %}
+  {% for item in cart.items %}
+    {% assign linePrice = item.line_price %}
+    {% assign totalSubtotalPrice = totalSubtotalPrice | plus: linePrice %}
+  {% endfor %}
+
+              <span>To Pay: <span class="h5">{{ totalSubtotalPrice | money }}</span> </span>
+              <br>
+
+              <p><em>{{ 'cart.general.shipping_at_checkout' | t }}</em></p>
+
+              {% comment %} Enhanced Validation Logic with Modern UI {% endcomment %}
+              {% assign minimum_order_value = 10000 %}
+
+              {% if cart.total_price < minimum_order_value %}
+                <!-- Minimum Order Warning -->
+                <div class="minimum-order-warning">
+                  <div class="warning-icon">⚠️</div>
+                  <div class="warning-content">
+                    <p class="warning-title">Minimum Order Required</p>
+                    <p class="warning-message">
+                      Add <strong>{{ minimum_order_value | minus: cart.total_price | money }}</strong> more to reach the minimum order value of <strong>{{ minimum_order_value | money }}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Disabled Checkout Button -->
+                <button type="button" id="enhanced-checkout-btn" class="btn checkout-btn-disabled" disabled>
+                  <span class="btn-icon">🔒</span>
+                  <span class="btn-text">Minimum Order Required</span>
+                </button>
+              {% else %}
+                <!-- Security Notice -->
+                <div class="security-notice">
+                  <div class="security-icon">🛡️</div>
+                  <span class="security-text">Secure Checkout Ready</span>
+                </div>
+
+                <!-- Enabled Checkout Button -->
+                <button type="button" id="enhanced-checkout-btn" class="btn checkout-btn-enabled">
+                  <span class="btn-icon">💳</span>
+                  <span class="btn-text">Proceed to Secure Checkout</span>
+                </button>
+              {% endif %}
+            </div>
+
+            {% if additional_checkout_buttons and metafield_data_single == blank  %}
+            {% comment %} <div style="display:flex;float:right;"><div class="cart__additional_checkout" style="margin:0;width:240px;margin-right:10px;">{{ content_for_additional_checkout_buttons }} </div></div> {% endcomment %}
+            {% endif %}
+          </div>
+        </div>
+
+        {% render 'hear-about-us' %}
+      </div>
+
+    </form>
+
+    <!-- Sticky Checkout Button -->
+    {% assign minimum_order_value = 10000 %}
+    {% assign cartTotal = 0 %}
+    {% for item in cart.items %}
+      {% assign variantComparePrice = item.variant.compare_at_price | times: item.quantity %}
+      {% assign cartTotal = cartTotal | plus: variantComparePrice %}
+    {% endfor %}
+
+    {% assign toPay = 0 %}
+    {% for item in cart.items %}
+      {% assign linePrice = item.line_price %}
+      {% assign toPay = toPay | plus: linePrice %}
+    {% endfor %}
+
+    {% assign totalDiscountAmount = cartTotal | minus: toPay %}
+
+    <div class="sticky-checkout-bar">
+      <div class="sticky-checkout-content">
+        <div class="sticky-cart-summary">
+          <div class="sticky-total">
+            <span class="sticky-total-label">Total:</span>
+            <span class="sticky-total-amount">{{ toPay | money }}</span>
+          </div>
+          {% if totalDiscountAmount > 0 %}
+            <div class="sticky-savings">
+              <span class="sticky-savings-text">You Save: {{ totalDiscountAmount | money }}</span>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="sticky-checkout-button">
+          {% if cart.total_price < minimum_order_value %}
+            <button type="button" class="sticky-btn sticky-btn-disabled" disabled>
+              🔒 Minimum Order Required
+            </button>
+          {% else %}
+            <button type="button" id="sticky-checkout-btn" class="sticky-btn sticky-btn-enabled">
+              💳 Secure Checkout
+            </button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  {% else %}
+    {% comment %}
+      The cart is empty
+    {% endcomment %}
+    <h2>{{ 'cart.general.title' | t }}</h2>
+     <!-- Reusable Breast Cancer Promotional Banner Section -->
+      {% render 'breast-cancer-promotional-css' %}
+       <div class="promotional-banner">
+     <a href="/pages/us-independence-day-sale-25">
+        <img src="#"
+              alt="Our Biggest Patriotic Sale of the Year"
+                title="Our Biggest Patriotic Sale of the Year"
+              class="banner-img">
+      </a>
+  </div> 
+    <p>{{ 'cart.general.empty' | t }}</p>
+    <p>{{ 'cart.general.continue_browsing_html' | t }}</p>
+  {% endif %}
+
+
+  <!-- Model Logic for the custom $100 validation start --><div id="validation-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span class="modal-icon">🛒</span>
+          Minimum Order Required
+        </h3>
+        <button class="modal-close" onclick="closeValidationModal()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="validation-info">
+          <div class="validation-item">
+            <span class="label">Current Total:</span>
+            <span class="value current-total">{{ cart.total_price | money }}</span>
+          </div>
+          <div class="validation-item">
+            <span class="label">Required Minimum:</span>
+            <span class="value minimum-required">{{ minimum_order_value | money }}</span>
+          </div>
+          <div class="validation-item highlight">
+            <span class="label">Amount Needed:</span>
+            <span class="value amount-needed">{{ minimum_order_value | minus: cart.total_price | money }}</span>
+          </div>
+        </div>
+
+        <div class="security-info">
+          <div class="security-badge">
+            <span class="security-icon">🔐</span>
+            <div class="security-text">
+              <p><strong>Security Notice</strong></p>
+              <p>This validation is enforced server-side and cannot be bypassed. Your cart must meet the minimum order requirement to proceed.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="continueShoppingFromModal()">
+          <span class="btn-icon">🛍️</span>
+          Continue Shopping
+        </button>
+        <button class="btn btn-secondary" onclick="closeValidationModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Modal -->
+  <div id="loading-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-container loading-container">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">Validating your cart...</p>
+      <p class="loading-subtext">Please wait while we verify your order meets our requirements.</p>
+    </div>
+  </div>
+  </div>
+
+
+  <!-- Model Logic for the custom $100 validation start End -->
+  <!-- Model Logic JavaScript for the custom $100 validation  start -->
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const minimumOrderValue = {{ minimum_order_value }};
+    const currentTotal = {{ cart.total_price }};
+    const checkoutButton = document.getElementById('enhanced-checkout-btn');
+    const validationModal = document.getElementById('validation-modal');
+    const loadingModal = document.getElementById('loading-modal');
+    const updateCartBtn = document.getElementById('update-cart-btn');
+    const updateCartIndicator = document.getElementById('update-cart-indicator');
+    let cartChanged = false;
+    let autoReloadTimer = null;
+
+    // Monitor quantity changes
+    function setupQuantityMonitoring() {
+      const quantityInputs = document.querySelectorAll('.quantity-input');
+
+      quantityInputs.forEach(input => {
+        const originalValue = input.dataset.originalValue;
+
+        input.addEventListener('input', function() {
+          const currentValue = this.value;
+          const hasChanged = currentValue !== originalValue;
+
+          if (hasChanged) {
+            cartChanged = true;
+            this.classList.add('changed');
+            showUpdateIndicator();
+            setupAutoReload();
+          } else {
+            this.classList.remove('changed');
+            checkIfAnyChanges();
+          }
+        });
+
+        input.addEventListener('change', function() {
+          const currentValue = this.value;
+          const hasChanged = currentValue !== originalValue;
+
+          if (hasChanged) {
+            cartChanged = true;
+            this.classList.add('changed');
+            showUpdateIndicator();
+            setupAutoReload();
+          }
+        });
+      });
+    }
+
+    function checkIfAnyChanges() {
+      const changedInputs = document.querySelectorAll('.quantity-input.changed');
+      if (changedInputs.length === 0) {
+        cartChanged = false;
+        hideUpdateIndicator();
+        clearAutoReload();
+      }
+    }
+
+    function showUpdateIndicator() {
+      if (updateCartBtn) {
+        updateCartBtn.classList.add('cart-changed');
+      }
+      if (updateCartIndicator) {
+        updateCartIndicator.style.display = 'block';
+      }
+    }
+
+    function hideUpdateIndicator() {
+      if (updateCartBtn) {
+        updateCartBtn.classList.remove('cart-changed');
+      }
+      if (updateCartIndicator) {
+        updateCartIndicator.style.display = 'none';
+      }
+    }
+
+    function setupAutoReload() {
+      clearAutoReload();
+      autoReloadTimer = setTimeout(() => {
+        if (cartChanged) {
+          console.log('Auto-reloading cart due to changes...');
+          document.getElementById('enhanced-cart-form').submit();
+        }
+      }, 5000); // Auto-reload after 5 seconds of inactivity
+    }
+
+    function clearAutoReload() {
+      if (autoReloadTimer) {
+        clearTimeout(autoReloadTimer);
+        autoReloadTimer = null;
+      }
+    }
+
+    // Initialize global cart validation with current values
+    if (window.CartValidation) {
+      window.CartValidation.init({
+        minimumOrderValue: minimumOrderValue,
+        currentTotal: currentTotal,
+        itemCount: {{ cart.item_count }}
+      });
+    }
+
+    // Security token generation
+    function generateSecurityToken() {
+      const timestamp = Date.now();
+      const cartData = {
+        total: currentTotal,
+        items: {{ cart.item_count }},
+        session: document.getElementById('cart-session-id').value
+      };
+      return btoa(JSON.stringify({ ...cartData, timestamp }));
+    }
+
+    // Enhanced checkout validation
+    function validateAndProceedToCheckout() {
+      // Show loading modal
+      showLoadingModal();
+
+      // Simulate server-side validation delay
+      setTimeout(() => {
+        hideLoadingModal();
+
+        // Multi-layer validation
+        const validationChecks = [
+          { check: currentTotal >= minimumOrderValue, message: 'Minimum order value not met' },
+          { check: {{ cart.item_count }} > 0, message: 'Cart is empty' },
+          { check: validateSecurityToken(), message: 'Security validation failed' },
+          { check: validateTimestamp(), message: 'Session expired' }
+        ];
+
+        const failedCheck = validationChecks.find(check => !check.check);
+
+        if (failedCheck) {
+          console.error('[SECURITY] Validation failed:', failedCheck.message);
+          showValidationModal();
+          return;
+        }
+
+        // If all validations pass, proceed to Shopify checkout
+        console.log('[SECURITY] All validations passed, proceeding to checkout');
+        proceedToShopifyCheckout();
+      }, 1500);
+    }
+
+    // Security token validation
+    function validateSecurityToken() {
+      const token = document.getElementById('cart-validation-token').value;
+      const expectedPattern = /^\d+-\d+-\d+$/;
+      return expectedPattern.test(token);
+    }
+
+    // Timestamp validation (prevent replay attacks)
+    function validateTimestamp() {
+      const now = Date.now();
+      const sessionStart = parseInt(document.getElementById('cart-validation-token').value.split('-')[0]) * 1000;
+      const maxSessionTime = 30 * 60 * 1000; // 30 minutes
+      return (now - sessionStart) < maxSessionTime;
+    }
+
+    // Show validation modal
+    function showValidationModal() {
+      validationModal.style.display = 'flex';
+      validationModal.classList.add('modal-enter');
+      document.body.style.overflow = 'hidden';
+
+      // Update dynamic values
+      updateModalValues();
+    }
+
+    // Update modal with current values
+    function updateModalValues() {
+      const remaining = minimumOrderValue - currentTotal;
+      document.querySelector('.amount-needed').textContent = '$' + (remaining / 100).toFixed(2);
+    }
+
+    // Show loading modal
+    function showLoadingModal() {
+      loadingModal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+
+    // Hide loading modal
+    function hideLoadingModal() {
+      loadingModal.style.display = 'none';
+      document.body.style.overflow = 'auto';
+    }
+
+    // Proceed to Shopify checkout
+    function proceedToShopifyCheckout() {
+      // Add security parameters to checkout URL
+      const securityToken = generateSecurityToken();
+      const checkoutUrl = '/checkout';
+
+      // Log checkout attempt for security monitoring
+      console.log('[SECURITY] Checkout initiated with validation token:', securityToken.slice(0, 20) + '...');
+
+      // Redirect to Shopify checkout
+      window.location.href = checkoutUrl;
+    }
+
+    // Event listeners
+    if (checkoutButton) {
+      checkoutButton.addEventListener('click', function(event) {
+        event.preventDefault();
+
+        if (currentTotal < minimumOrderValue) {
+          showValidationModal();
+        } else {
+          validateAndProceedToCheckout();
+        }
+      });
+    }
+
+    // Sticky checkout button functionality
+    const stickyCheckoutBtn = document.getElementById('sticky-checkout-btn');
+    if (stickyCheckoutBtn) {
+      stickyCheckoutBtn.addEventListener('click', function(event) {
+        event.preventDefault();
+
+        if (currentTotal < minimumOrderValue) {
+          showValidationModal();
+        } else {
+          validateAndProceedToCheckout();
+        }
+      });
+    }
+
+    // Sticky bar is now always visible on desktop
+
+    // Global functions for modal controls
+    window.closeValidationModal = function() {
+      validationModal.style.display = 'none';
+      document.body.style.overflow = 'auto';
+    };
+
+    window.continueShoppingFromModal = function() {
+      closeValidationModal();
+      // Optionally scroll to product recommendations or redirect to collections
+      window.location.href = '/collections/all';
+    };
+
+    // Prevent form manipulation
+    document.addEventListener('keydown', function(e) {
+      // Prevent opening developer tools with common shortcuts
+      if (e.key === 'F12' || 
+          (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'C' || e.key === 'J')) ||
+          (e.ctrlKey && e.key === 'U')) {
+        e.preventDefault();
+        console.warn('[SECURITY] Developer tools access attempt detected');
+      }
+    });
+
+    // Monitor for tampering attempts
+    const originalConsoleLog = console.log;
+    console.log = function(...args) {
+      if (args.some(arg => typeof arg === 'string' && arg.includes('minimum'))) {
+        console.warn('[SECURITY] Potential tampering attempt detected');
+      }
+      originalConsoleLog.apply(console, args);
+    };
+  });
+  </script>
+  <!-- CORRECTED CART.LIQUID SCRIPT FOR $1000 THRESHOLD -->
+  <!-- CORRECTED CART.LIQUID SCRIPT FOR $1000 THRESHOLD -->
+  <script>
+  // Newsletter Subscriber Cart Validation for $1000 Maximum Threshold
+  (function() {
+    'use strict';
+
+    console.log('🔍 Foxx Cart Validation: Script started');
+
+    // IMPORTANT: Use your actual Store ID from localStorage
+    const STORE_ID = 'fa37fc5c-90ce-44d2-83d8-34835f3b45af';
+    const SUBSCRIBER_MAXIMUM_AMOUNT = 100000; // $1000 in cents (Shopify format)
+    const STORAGE_KEY = 'foxx_newsletter_' + STORE_ID;
+
+    console.log('🔍 Using Storage Key:', STORAGE_KEY);
+
+    // Function to check if user is subscribed to newsletter
+    function isUserSubscribed() {
+      try {
+        const subscribedEmail = localStorage.getItem(STORAGE_KEY);
+        const subscribedTime = localStorage.getItem(STORAGE_KEY + '_time');
+
+        console.log('🔍 Subscription Check:', {
+          subscribedEmail: subscribedEmail,
+          subscribedTime: subscribedTime,
+          hasEmail: subscribedEmail && subscribedEmail.includes('@'),
+          hasTime: !!subscribedTime
+        });
+
+        return subscribedEmail && 
+               subscribedEmail.includes('@') && 
+               subscribedTime;
+      } catch (error) {
+        console.error('❌ Could not check subscription status:', error);
+        return false;
+      }
+    }
+
+    // Function to get current cart total (Shopify global variable)
+    function getCurrentCartTotal() {
+      const cartTotal = {{ cart.total_price }};
+      console.log('🔍 Cart Total (cents):', cartTotal);
+      return cartTotal || 0;
+    }
+
+    // Function to format money (Shopify style)
+    function formatMoney(cents) {
+      return '$' + (cents / 100).toFixed(2);
+    }
+
+    // Function to create and show validation message
+    function showCartValidationMessage() {
+      const currentTotal = getCurrentCartTotal();
+      const isSubscribed = isUserSubscribed();
+
+      console.log('🔍 Validation Check:', {
+        currentTotal: currentTotal,
+        subscriberMaximum: SUBSCRIBER_MAXIMUM_AMOUNT,
+        isSubscribed: isSubscribed,
+        isOverThreshold: currentTotal > SUBSCRIBER_MAXIMUM_AMOUNT,
+        isBelowThreshold: currentTotal <= SUBSCRIBER_MAXIMUM_AMOUNT
+      });
+
+      // Remove existing message first
+      const existingMessage = document.getElementById('subscriber-cart-validation');
+      if (existingMessage) {
+        existingMessage.remove();
+      }
+
+      // Only show if user is subscribed
+      if (!isSubscribed) {
+        console.log('ℹ️ User not subscribed - no validation message needed');
+        return;
+      }
+
+      let messageHtml = '';
+
+      if (currentTotal > SUBSCRIBER_MAXIMUM_AMOUNT) {
+        // Cart exceeds $1000 - show warning that discount won't work
+        const excess = currentTotal - SUBSCRIBER_MAXIMUM_AMOUNT;
+        messageHtml = `
+          <div id="subscriber-cart-validation" style="
+            background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+            color: white;
+            padding: 16px;
+            margin: 16px 0;
+            border-radius: 12px;
+            border-left: 4px solid #dc2626;
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+            position: relative;
+            animation: slideIn 0.5s ease-out;
+            z-index: 1000;
+          ">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 18px;
+              ">⚠️</div>
+              <div style="flex: 1;">
+                <h4 style="margin: 0 0 4px 0; font-size: 16px; font-weight: 600;">
+                  Cart Total Exceeds Discount Limit
+                </h4>
+                <p style="margin: 0; font-size: 14px; opacity: 0.9;">
+                  Your cart total is ${formatMoney(currentTotal)}. Newsletter subscriber discount codes (WELCOME50) are only valid for orders up to $1,000.
+                </p>
+                <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.8;">
+                  Remove ${formatMoney(excess)} worth of items to use your <strong>WELCOME50</strong> discount code.
+                </p>
+              </div>
+              <button onclick="closeCartValidation()" style="
+                background: rgba(255, 255, 255, 0.2);
+                border: none;
+                color: white;
+                border-radius: 50%;
+                width: 28px;
+                height: 28px;
+                cursor: pointer;
+                font-size: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              ">×</button>
+            </div>
+            <div style="
+              margin-top: 12px;
+              padding-top: 12px;
+              border-top: 1px solid rgba(255, 255, 255, 0.2);
+              font-size: 12px;
+              opacity: 0.8;
+            ">
+              ❌ Discount code will not work at checkout with current total
+            </div>
+          </div>
+        `;
+      } else {
+        // Cart is within $1000 limit - show eligible message
+        const remaining = SUBSCRIBER_MAXIMUM_AMOUNT - currentTotal;
+        messageHtml = `
+          <div id="subscriber-cart-validation" style="
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            color: white;
+            padding: 16px;
+            margin: 16px 0;
+            border-radius: 12px;
+            border-left: 4px solid #059669;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.15);
+            position: relative;
+            animation: slideIn 0.5s ease-out;
+            z-index: 1000;
+          ">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 18px;
+              ">✅</div>
+              <div style="flex: 1;">
+                <h4 style="margin: 0 0 4px 0; font-size: 16px; font-weight: 600;">
+                  Discount Eligible!
+                </h4>
+                <p style="margin: 0; font-size: 14px; opacity: 0.9;">
+                  Your cart total is ${formatMoney(currentTotal)}. You can use your newsletter subscriber discount at checkout.
+                </p>
+                <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.8;">
+                  You can add up to ${formatMoney(remaining)} more and still use your discount.
+                </p>
+              </div>
+              <button onclick="closeCartValidation()" style="
+                background: rgba(255, 255, 255, 0.2);
+                border: none;
+                color: white;
+                border-radius: 50%;
+                width: 28px;
+                height: 28px;
+                cursor: pointer;
+                font-size: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              ">×</button>
+            </div>
+            <div style="
+              margin-top: 12px;
+              padding-top: 12px;
+              border-top: 1px solid rgba(255, 255, 255, 0.2);
+              font-size: 12px;
+              opacity: 0.8;
+            ">
+              ✓ Proceed to checkout to apply your discount code
+            </div>
+          </div>
+        `;
+      }
+
+      // Insert validation message
+      const cartForm = document.querySelector('.cart, #enhanced-cart-form, form[action="/cart"], .cart-drawer__items');
+      if (cartForm) {
+        console.log('✅ Inserting validation message');
+        cartForm.insertAdjacentHTML('afterbegin', messageHtml);
+      } else {
+        console.error('❌ Could not find cart container to insert validation message');
+      }
+
+      console.log('✅ Cart validation message shown');
+    }
+
+    // Function to close the validation message
+    window.closeCartValidation = function() {
+      const message = document.getElementById('subscriber-cart-validation');
+      if (message) {
+        message.style.animation = 'slideOut 0.3s ease-in forwards';
+        setTimeout(() => {
+          message.remove();
+          console.log('✅ Validation message removed');
+        }, 300);
+      }
+    };
+
+    // CSS animations
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateY(-10px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { transform: translateY(0); opacity: 1; }
+        to { transform: translateY(-10px); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Initialize when DOM is ready
+    function init() {
+      console.log('🚀 Initializing cart validation system');
+
+      // Show initial validation message
+      setTimeout(() => {
+        showCartValidationMessage();
+      }, 1000);
+
+      // Listen for cart updates
+      document.addEventListener('change', function(e) {
+        if (e.target.matches('input[name="updates[]"]') || 
+            e.target.matches('.js-qty-input') ||
+            e.target.matches('[data-quantity-input]')) {
+          console.log('🔄 Cart quantity changed, rechecking validation');
+          setTimeout(() => {
+            showCartValidationMessage();
+          }, 500);
+        }
+      });
+
+      // Listen for cart form submissions
+      document.addEventListener('submit', function(e) {
+        if (e.target.matches('form[action="/cart"]') || 
+            e.target.matches('.cart') ||
+            e.target.id === 'enhanced-cart-form') {
+          console.log('🔄 Cart form submitted, will recheck validation after page reload');
+        }
+      });
+    }
+
+    // Start when page loads
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+
+  })();
+  </script>
+  <!-- Model Logic JavaScript for the custom $100 validation end-->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const swiper = new Swiper('.swiper-container', {
+        loop: true,
+        autoplay: {
+          delay: 5000, // 5 seconds between slides
+          disableOnInteraction: false,
+        },
+        pagination: {
+          el: '.swiper-pagination',
+          clickable: true,
+        },
+        navigation: {
+          nextEl: '.swiper-button-next',
+          prevEl: '.swiper-button-prev',
+        },
+      });
+    });
+  </script>
+
+
+  <!-- Cart-specific styles that remain inline -->
+  <style>
+  .red-border{border:2px solid #C70209!important;background-color:#f5e7e7;position:relative;border-radius:10px;padding:10px;margin-bottom:10px;margin-top:10px}.free-gift-label{position:absolute;top:10px;right:10px;background-color:#fcc;color:#000;padding:5px 10px;border-radius:5px;font-weight:700}.cart__image{display:block;width:100%;text-align:center;margin:10px auto}.cart__image-container{width:100%;height:150px;overflow:hidden;margin:0 auto;border-radius:8px}.red-border .cart__image-container{border:2px solid #0071CE;box-shadow:0 4px 8px #0000001a}.cart-image{width:100%;height:100%;object-fit:contain;display:block}.grey-border{border:2px solid #D6D6D6;position:relative;border-radius:10px;padding:10px}.cart_product_title{color:#333}.cart_product_title:hover{color:#333}.cart__remove{display:flex;align-items:center;width:min-content;font-size:14px;color:#ff8080;border:none;border-radius:4px;cursor:pointer;text-decoration:none;transition:background-color .3s ease}.cart__remove:hover{color:#f66}.cart__remove svg{fill:#ff8080}.cart__remove svg:hover{fill:#f66}.af_tag{font-size:14px;color:#000;background-color:#DEDEDE;border:solid 1px #D6D6D6;padding:5px;margin:3px 0;border-radius:5px}div.af_tag{background:#EFF4F7!important;border-radius:20px!important;color:#222;display:flex;-webkit-align-items:center;align-items:center;padding:5px 10px;background:#e5e5e5;border:solid thin #d5d5d5;border-radius:3px!important;margin-right:5px!important;position:relative;transition:all ease-in-out .2s}div.af_tag .af_coupon_wrapper{margin-right:5px}div.af_tag span.af_coupon_wrapper svg{width:15px;height:15px}div.af_tag > *{display:flex;-webkit-align-items:center;align-items:center}#af_kd_tagged_discounts .af_coupon_text_amount{line-height:23px!important}.af_coupon_text_amount{display:grid;max-height:23px;text-align:center}div.af_tag span.af_coupon_text{color:#222}.af_coupon_text.af_coupon_code{visibility:visible!important;position:unset!important}.af_tagged_discounts .af_tag .af_coupon_text{display:inline-block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden!important}.banner-container{max-width:800px;margin:0 auto;overflow:hidden}.promotional-banner{width:100%;overflow:hidden}
+
+  /* Enhanced Cart Item Styling */
+  .price-display {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .original-price {
+    color: #999;
+    text-decoration: line-through;
+    font-size: 14px;
+  }
+
+  .current-price {
+    color: #333;
+    font-weight: 600;
+    font-size: 16px;
+  }
+
+  .quantity-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 5px;
+  }
+
+  .quantity-input {
+    width: 60px !important;
+    text-align: center;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+
+  .total-price-display {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-end;
+  }
+
+  .original-total {
+    color: #999;
+    text-decoration: line-through;
+    font-size: 14px;
+  }
+
+  .current-total {
+    color: #dc3545;
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  /* Improved Mobile Layout */
+  @media (max-width: 768px) {
+    .cart__row {
+      margin-bottom: 10px;
+      padding: 10px 8px;
+    }
+
+    .cart__row .grid--full {
+      display: block;
+    }
+
+    .cart__row .grid__item {
+      width: 100% !important;
+      margin-bottom: 10px;
+    }
+
+    .cart__image-container {
+      height: 100px;
+      width: 100px;
+      margin: 0 auto 10px auto;
+    }
+
+    .cart_product_title {
+      font-size: 14px;
+      text-align: center;
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+
+    .cart__row--table-large .grid--full {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      gap: 5px;
+    }
+
+    .cart__row--table-large .grid__item {
+      text-align: center;
+      flex: 1;
+    }
+
+    .cart__mini-labels {
+      font-weight: 600;
+      color: #666;
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+    }
+
+    .quantity-input {
+      width: 50px !important;
+      text-align: center;
+      margin: 0 auto;
+      padding: 5px;
+      font-size: 12px;
+    }
+
+    .price-display,
+    .total-price-display {
+      gap: 2px;
+    }
+
+    .original-price,
+    .original-total {
+      font-size: 12px;
+    }
+
+    .current-price,
+    .current-total {
+      font-size: 14px;
+    }
+
+    .cart-summary-desktop {
+      display: none;
+    }
+
+    /* Reduce spacing between cart items */
+    .red-border,
+    .grey-border {
+      margin-bottom: 8px;
+      margin-top: 8px;
+      padding: 8px;
+    }
+
+    /* Add margin bottom for sticky button */
+    .main-content {
+      margin-bottom: 120px;
+    }
+  }
+
+  /* Sticky Checkout Button Styles */
+  .sticky-checkout-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 2px solid #e0e0e0;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+    z-index: 1000;
+    padding: 15px 20px;
+  }
+
+  .sticky-checkout-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .sticky-cart-summary {
+    flex: 1;
+  }
+
+  .sticky-total {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+  }
+
+  .sticky-total-label {
+    font-weight: 600;
+    color: #333;
+    font-size: 16px;
+  }
+
+  .sticky-total-amount {
+    font-weight: 700;
+    color: #2f5b96;
+    font-size: 18px;
+  }
+
+  .sticky-savings {
+    font-size: 14px;
+  }
+
+  .sticky-savings-text {
+    color: #28a745;
+    font-weight: 600;
+  }
+
+  .sticky-checkout-button {
+    flex-shrink: 0;
+    margin-left: 20px;
+  }
+
+  .sticky-btn {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 200px;
+    text-align: center;
+  }
+
+  .sticky-btn-enabled {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+  }
+
+  .sticky-btn-enabled:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+  }
+
+  .sticky-btn-disabled {
+    background: #6c757d;
+    color: white;
+    cursor: not-allowed;
+  }
+
+  /* Mobile Sticky Button */
+  @media (max-width: 768px) {
+    .sticky-checkout-content {
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .sticky-cart-summary {
+      width: 100%;
+      text-align: center;
+    }
+
+    .sticky-total {
+      justify-content: center;
+    }
+
+    .sticky-checkout-button {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .sticky-btn {
+      width: 100%;
+      min-width: auto;
+      padding: 12px 20px;
+      font-size: 14px;
+    }
+
+    .sticky-checkout-bar {
+      padding: 12px 15px;
+    }
+  }
+
+  /* Desktop - Always show sticky bar */
+  @media (min-width: 769px) {
+    .cart-summary-desktop {
+      display: block;
+    }
+
+    .sticky-checkout-bar {
+      transform: translateY(0);
+      transition: transform 0.3s ease;
+    }
+
+    /* Add margin to main content to prevent overlap */
+    .main-content {
+      margin-bottom: 120px;
+    }
+  }
+  </style>
+
+   {% if cart.item_count > 0 %}
+  <!-- Security Feature bottom section with contact us start-->
+   <style>
+    .checkout-footer{border-top:1px solid #F5F5F6;margin:0 0 10px}.checkout-footer .content{max-width:980px;padding-top:10px;margin:auto}.checkout-footer .images{display:inline-flex}.checkout-footer .content .contact-us{color:#282c3f;text-decoration:none;font-weight:600}.checkout-footer .content .contact-us span{float:right;font-size:14px;padding:10px 0}.checkout-footer svg{width:60px!important;height:37px!important;stroke:none!important}
+     </style>
+     <div class="checkout-footer"> 
+      <div class="content"> 
+      <div class="images"> 
+        <img class="footer-bank-ssl" src="https://www.foxxlifesciences.com/cdn/shopifycloud/shopify/assets/payment_icons/visa-319d545c6fd255c9aad5eeaad21fd6f7f7b4fdbdb1a35ce83b89cca12a187f00.svg" width="70" height="37"> 
+        <img class="footer-bank-visa" src="https://www.foxxlifesciences.com/cdn/shopifycloud/shopify/assets/payment_icons/master-173035bc8124581983d4efa50cf8626e8553c2b311353fbf67485f9c1a2b88d1.svg" width="60" height="37"> 
+        <img class="footer-bank-mc" src="https://www.foxxlifesciences.com/cdn/shopifycloud/shopify/assets/payment_icons/paypal-49e4c1e03244b6d2de0d270ca0d22dd15da6e92cc7266e93eb43762df5aa355d.svg" width="60" height="37"> 
+
+       </div> 
+       <a href="/pages/contact-us" class="contact-us"> <span>Need Help ? Contact Us</span> </a> </div></div>
+         {% endif %}
+      <!-- Security Feature bottom section with contact us end-->
+  <!-- custom recommendation section "complete your order with" start-->
+  {{ 'https://cdnjs.cloudflare.com/ajax/libs/flickity/2.2.1/flickity.min.css' | stylesheet_tag }}
+  {{ 'https://cdnjs.cloudflare.com/ajax/libs/flickity/2.2.1/flickity.pkgd.min.js' | script_tag }}
+   <div class="container">
+
+   {% if cart.item_count > 0 %}
+      {% assign first_item = cart.items.first %}
+      {% if first_item.product and first_item.variant %}
+        {% assign product_collection = first_item.product.collections.first %}
+        {% assign variant_id = first_item.variant.id %}
+        <h3 class="recommended-buy-title">Complete your order with</h3>
+        {% assign cart_items = cart.items | map: 'product_id' %}
+        <div class="flickity-slider-wrapper">
+            <div id="recommended-products" class="recommended-products">
+                {% assign cart_product_ids = cart.items | map: 'product_id' %}
+                {% for product in collections[product_collection.handle].products %}
+                {% unless product.variants contains variant_id or product.id == first_item.product.id or cart_product_ids contains product.id %}
+                {% if product.available %}
+                    <div class="recommended-product-card product-{{product.id}}">
+                      <a href="{{ product.url }}"><img class="recommended-product-image" src="{{ product.featured_image.src | img_url: '500x' }}" alt="{{ product.featured_image.alt }}"></a>
+                      <div class="recommended-product-info">
+                        <h4 class="recommended-product-title"><a href="{{ product.url }}">{{ product.title | truncate: 32 | slice: 5, 100 }}</a></h4>
+                        <small style="display:none;">{{ product.title | truncate: 32 | split: ", " | last | split: " " | slice: 1, 100 | join: " " }}</small>
+                        <div style="display:flex; justify-content:flex-start;vertical-align:middle;align-items:center;width:100%">
+                          <div class="recommended-product-price" style="display: flex; flex-basis: 50%; width: 50%;">
+                            <div class="prices" style="display: flex; flex-direction: column;">
+                              <span style="font-weight: 400; font-size: 12px; color: #bdbdbd; text-decoration: line-through; margin-bottom: 5px;">
+                                {% if product.variants.first.compare_at_price %}
+                                  <del>{{ product.variants.first.compare_at_price | money }}</del>
+                                {% else %}
+                                  {{ product.price | money }}
+                                {% endif %}
+                              </span>
+                              <span style="font-weight: 700; font-size: 14px;">{{ product.price | money }}</span>
+                            </div>
+                          </div>
+                          <form action="/cart/add" method="post"  style="flex-basis:50%;">
+                            <input type="hidden" name="id" value="{{ product.variants.first.id }}">
+                            <button type="submit" style="flex-basis:50%;" class="btn recommended-product-btn">ADD</button>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                    {% assign count = count | plus: 1 %}
+                  {% endif %}
+                {% endunless %}
+              {% endfor %}
+            </div>
+          </div>
+          <style>
+         .carousel-cell{width:calc(100% - 10px);margin-right:10px}.carousel-cell img{width:100%;height:auto}.recommended-buy-title{font-size:16px;margin-bottom:24px;color:#181818;font-weight:500}.flickity-prev-next-button{background:none;border:none;color:#333;font-size:24px;margin-top:-20px}.flickity-prev-next-button:hover{color:#000}.flickity-prev-button{left:10px}.flickity-next-button{right:10px}.flickity-page-dots{bottom:0;margin-top:10px}.flickity-page-dots .dot{width:10px;height:10px;margin:0 5px;border-radius:50%;background-color:#333}.flickity-page-dots .dot.is-selected{background-color:#f90}.recommended-products{margin:20px 0}.recommended-product-card{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));grid-gap:20px;width:100%;padding:0;margin:4px;border:1px solid #ccc;border-radius:5px;box-sizing:border-box}@media only screen and (max-width: 767px){.recommended-product-card{width:60%;grid-template-columns:1fr;grid-gap:10px;margin:10px auto;margin-right:10px}.recommended-products{gap:6px}}@media only screen and (min-width: 768px){.recommended-product-card{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));grid-gap:10px;width:min-content}}.recommended-product-image{width:100%;height:150px;object-fit:contain;object-position:center}.recommended-product-info{padding:10px;text-align:left}h4.recommended-product-title{margin:10px 0;font-size:12px;text-align:left}p.recommended-product-price{font-weight:700;text-align:left;margin-bottom:0!important}.recommended-product-btn{display:block;width:100%!important;padding:8px;margin-top:10px;border:none;background-color:#085ee733;color:#095ee7;font-weight:700;text-transform:uppercase;cursor:pointer;position:relative;border:2px solid #095ee7;border-radius:8px}.recommended-product-btn::after{content:"+";position:absolute;top:0;right:10px;color:#095ee7;font-size:18px}.recommended-product-btn:hover{background-color:#f903;border:2px solid #f90;color:#f90}
+          </style>
+          <script>
+            // initialize Flickity slider
+        var recommendedProducts = document.querySelector('#recommended-products');
+        if (recommendedProducts) {
+          var flkty = new Flickity(recommendedProducts, {
+            cellAlign: 'left',
+            contain: true,
+            prevNextButtons: false,
+            pageDots: false,
+            wrapAround: true,
+            draggable: '>1',
+            freeScroll: true,
+            selectedAttraction: 0.02,
+            friction: 0.3
+          });
+
+          // enable smooth scrolling on mobile devices
+          if (window.matchMedia('(max-width: 767px)').matches) {
+            flkty.on('dragEnd', function(event, pointer) {
+              if (!flkty.isDragging && !flkty.slidesAreDraggable) {
+                event.preventDefault();
+                var scrollAmount = Math.abs(pointer.clientX - flkty.slides[0].getBoundingClientRect().left);
+                var scrollDuration = Math.round(scrollAmount / 6);
+                recommendedProducts.scrollTo({
+                  left: recommendedProducts.scrollLeft - scrollAmount,
+                  behavior: 'smooth'
+                });
+              }
+            });
+          }
+        }
+
+          </script>
+      {% endif %}
+    {% endif %}
+      <!-- custom recommendation section "complete your meal with" end-->
+   </div>
+
