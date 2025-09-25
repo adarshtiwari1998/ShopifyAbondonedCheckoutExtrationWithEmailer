@@ -1241,7 +1241,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Use invisible reCAPTCHA for automatic token generation
       if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise && RECAPTCHA_SITE_KEY) {
-        await grecaptcha.enterprise.ready();
+        await new Promise((resolve) => {
+          grecaptcha.enterprise.ready(resolve);
+        });
 
         const token = await grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, {
           action: 'checkout_validation'
