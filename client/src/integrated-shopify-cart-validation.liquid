@@ -488,16 +488,19 @@ document.addEventListener('DOMContentLoaded', function() {
         RECAPTCHA_SITE_KEY = config.siteKey;
         CONFIG.SITE_KEY = config.siteKey;
         
-        // Load reCAPTCHA Enterprise script with checkbox widget support
+        // Load reCAPTCHA Enterprise script - CHOICE: Use your current Score-based key or create new Checkbox key
         if (RECAPTCHA_SITE_KEY) {
           const script = document.createElement('script');
+          // Option A: For NEW Checkbox key (visible widget) - RECOMMENDED for user experience
           script.src = 'https://www.google.com/recaptcha/enterprise.js?render=explicit';
+          // Option B: For current Score-based key (invisible)
+          // script.src = `https://www.google.com/recaptcha/enterprise.js?render=${RECAPTCHA_SITE_KEY}`;
           script.async = true;
           script.defer = true;
           document.head.appendChild(script);
           
           if (CONFIG.DEBUG_MODE) {
-            console.log('[Cart Validation] reCAPTCHA Enterprise checkbox script loaded');
+            console.log('[Cart Validation] reCAPTCHA Enterprise script loaded - Key type: Checkbox');
           }
         }
       } else {
@@ -671,12 +674,24 @@ document.addEventListener('DOMContentLoaded', function() {
     const checkRecaptcha = () => {
       if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
         try {
-          // Render the reCAPTCHA Enterprise checkbox widget
+          // DETECT KEY TYPE: Try checkbox first, fallback to invisible if "Invalid key type"
+          console.log('[reCAPTCHA] Attempting to render widget with key:', RECAPTCHA_SITE_KEY);
+          
+          // Try Checkbox widget first (for new Checkbox keys)
           window.flsvalidationRecaptchaWidgetId = grecaptcha.enterprise.render('flsvalidation-recaptcha-container', {
             'sitekey': RECAPTCHA_SITE_KEY,
             'callback': onRecaptchaCallback,
             'expired-callback': onRecaptchaExpired,
-            'error-callback': onRecaptchaError,
+            'error-callback': function(error) {
+              console.error('[reCAPTCHA Enterprise] Checkbox error:', error);
+              // If "Invalid key type", try invisible mode instead
+              if (error.includes && error.includes('Invalid key type')) {
+                console.log('[reCAPTCHA] Checkbox failed, trying invisible mode...');
+                executeInvisibleRecaptcha();
+              } else {
+                onRecaptchaError(error);
+              }
+            },
             'theme': 'light',
             'size': 'normal'
           });
@@ -685,9 +700,15 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('[reCAPTCHA Enterprise] Checkbox widget rendered successfully');
           }
         } catch (error) {
-          console.error('[reCAPTCHA Enterprise] Error rendering widget:', error);
-          // Fallback to invisible mode
-          document.getElementById('flsvalidation-enterprise-fallback').style.display = 'block';
+          console.error('[reCAPTCHA Enterprise] Error rendering checkbox widget:', error);
+          // If checkbox fails, try invisible mode (for Score-based keys)
+          if (error.message && error.message.includes('Invalid key type')) {
+            console.log('[reCAPTCHA] Checkbox key type invalid, switching to invisible mode...');
+            executeInvisibleRecaptcha();
+          } else {
+            // Show fallback UI
+            document.getElementById('flsvalidation-enterprise-fallback').style.display = 'block';
+          }
         }
       } else {
         // Retry after 500ms if grecaptcha enterprise not loaded yet
@@ -696,6 +717,34 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     checkRecaptcha();
+  }
+
+  // Invisible reCAPTCHA function for Score-based keys
+  function executeInvisibleRecaptcha() {
+    console.log('[reCAPTCHA] Executing invisible verification for Score-based key...');
+    
+    // Hide checkbox container and show invisible mode UI
+    document.getElementById('flsvalidation-recaptcha-container').style.display = 'none';
+    document.getElementById('flsvalidation-enterprise-fallback').style.display = 'block';
+    
+    // For Score-based keys, execute invisible challenge
+    grecaptcha.enterprise.ready(function() {
+      grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, {
+        action: 'checkout_validation'
+      }).then(function(token) {
+        console.log('[reCAPTCHA] Invisible verification completed');
+        window.flsvalidationRecaptchaResponse = token;
+        elements.captchaSubmit.disabled = false;
+        
+        // Auto-submit for invisible mode (better UX)
+        setTimeout(() => {
+          handleCaptchaSubmit();
+        }, 1000);
+      }).catch(function(error) {
+        console.error('[reCAPTCHA] Invisible execution failed:', error);
+        onRecaptchaError(error);
+      });
+    });
   }
   
   // Callback when user completes reCAPTCHA
