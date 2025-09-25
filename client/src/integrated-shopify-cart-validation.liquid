@@ -395,7 +395,7 @@
 document.addEventListener('DOMContentLoaded', function() {
   // Configuration (will be loaded dynamically from server)
   let CONFIG = {
-    API_BASE_URL: 'https://e54fff5c-6607-420f-93c6-d3b0d5c4a802-00-3dqfuwn1ssai0.sisko.replit.dev/api/validation',
+    API_BASE_URL: 'https://4909bee8-7949-4ac7-9341-fe5e9867ece0-00-2jkp7rzj6u09g.worf.replit.dev/api/validation',
     MINIMUM_CART_VALUE: {{ minimum_order_value }}, // Use your Shopify variable
     DEBUG_MODE: true,
     SITE_KEY: null // Will be loaded securely from server
@@ -497,13 +497,13 @@ document.addEventListener('DOMContentLoaded', function() {
       elements.stickyCheckoutBtn.addEventListener('click', handleCheckoutClick);
     }
 
-    // reCAPTCHA Enterprise events
+    // reCAPTCHA Enterprise events - FIX: Pass function reference, not invocation
     if (elements.enterpriseVerify) {
-      elements.enterpriseVerify.addEventListener('click', handleEnterpriseVerify);
+      elements.enterpriseVerify.addEventListener('click', () => handleEnterpriseVerify());
     }
     
     if (elements.captchaSubmit) {
-      elements.captchaSubmit.addEventListener('click', handleCaptchaSubmit);
+      elements.captchaSubmit.addEventListener('click', () => handleCaptchaSubmit());
     }
 
     if (elements.captchaCancel) {
@@ -655,12 +655,20 @@ document.addEventListener('DOMContentLoaded', function() {
       elements.enterpriseVerify.disabled = true;
       elements.enterpriseVerify.textContent = 'Verifying...';
       
-      // Execute reCAPTCHA Enterprise
+      // Check if reCAPTCHA Enterprise is available
       if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
         throw new Error('reCAPTCHA Enterprise not loaded');
       }
       
-      await grecaptcha.enterprise.ready();
+      if (!RECAPTCHA_SITE_KEY) {
+        throw new Error('reCAPTCHA site key not loaded');
+      }
+      
+      // Wait for grecaptcha.enterprise to be ready before executing
+      await new Promise((resolve) => {
+        grecaptcha.enterprise.ready(resolve);
+      });
+      
       const token = await grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, {
         action: 'checkout_validation'
       });
@@ -668,7 +676,7 @@ document.addEventListener('DOMContentLoaded', function() {
       window.flsvalidationRecaptchaResponse = token;
       
       if (CONFIG.DEBUG_MODE) {
-        console.log('[reCAPTCHA Enterprise] Token obtained');
+        console.log('[reCAPTCHA Enterprise] Token obtained successfully');
       }
       
       // Automatically submit the captcha
@@ -679,7 +687,7 @@ document.addEventListener('DOMContentLoaded', function() {
       elements.enterpriseVerify.disabled = false;
       elements.enterpriseVerify.textContent = 'Retry Verification';
       showValidationStatus('error', '❌ reCAPTCHA Enterprise Error', 
-        'Unable to complete verification. Please try again.');
+        error.message || 'Unable to complete verification. Please try again.');
     }
   }
 

@@ -6,6 +6,9 @@ import { CredentialsManager } from "./services/credentialsManager.js";
 
 const app = express();
 
+// Trust proxy for proper IP detection behind Replit's proxy
+app.set('trust proxy', true);
+
 // CORS configuration to allow requests from your Shopify store
 app.use(cors({
   origin: [

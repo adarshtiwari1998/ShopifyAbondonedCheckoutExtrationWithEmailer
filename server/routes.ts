@@ -16,10 +16,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Helper function to get client IP
   const getClientIp = (req: any): string => {
-    return req.headers['x-forwarded-for']?.split(',')[0] || 
-           req.connection?.remoteAddress || 
-           req.socket?.remoteAddress || 
-           '127.0.0.1';
+    // First try req.ip which works with trust proxy enabled
+    if (req.ip) {
+      let ip = req.ip;
+      // Strip IPv6-mapped IPv4 prefix
+      if (ip.startsWith('::ffff:')) {
+        ip = ip.substring(7);
+      }
+      // Don't use private/reserved IPs for geolocation
+      if (!ip.startsWith('127.') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.')) {
+        return ip;
+      }
+    }
+    
+    // Fallback to headers
+    const forwarded = req.headers['x-forwarded-for']?.split(',')[0]?.trim();
+    if (forwarded && !forwarded.startsWith('127.') && !forwarded.startsWith('192.168.')) {
+      return forwarded;
+    }
+    
+    return req.connection?.remoteAddress || req.socket?.remoteAddress || '127.0.0.1';
   };
 
   // Validation API Routes
