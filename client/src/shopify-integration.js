@@ -17,11 +17,11 @@
     
     // Configuration
     const CONFIG = {
-        API_BASE_URL: 'https://your-replit-app.replit.dev/api/validation', // Replace with your actual URL
+        API_BASE_URL: window.location.origin + '/api/validation', // Use current domain
         MINIMUM_CART_VALUE: 10000, // $100.00 in cents (your existing validation)
         ENABLE_GEOLOCATION: true,
         ENABLE_CAPTCHA: true,
-        DEBUG_MODE: false // Set to true for testing
+        DEBUG_MODE: true // Set to true for testing
     };
     
     // Validation state
