@@ -4,3 +4,11 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Security: Never commit credential files
+google-service-account.json
+server/config/google-service-account.json
+*.json.key
+*.pem
+.env.local
+.env.production

@@ -601,7 +601,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let CONFIG = {
     API_BASE_URL: 'https://fc657425-371d-46bf-b672-90054d8eca4a-00-159yjdvvllji8.pike.replit.dev/api/validation',
     MINIMUM_CART_VALUE: {{ minimum_order_value }}, // Use your Shopify variable
-    DEBUG_MODE: true,
+    DEBUG_MODE: false, // Set to false for production
     SITE_KEY: null // Will be loaded securely from server
   };
 
@@ -859,11 +859,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     } catch (error) {
       console.error('Validation error:', error);
-      showValidationStatus('warning', '⚠️ Validation Service Unavailable', 
-        'Proceeding with basic validation only. Advanced security features are temporarily unavailable.');
+      showValidationStatus('error', '❌ Validation Service Unavailable', 
+        'Please try again in a moment. If the problem persists, contact support.');
+      
+      // SECURITY: Never auto-approve on backend errors - show retry option
       setTimeout(() => {
-        showSuccessAndRedirect();
-      }, 2000);
+        elements.manualVerification.style.display = 'block';
+        const retryButton = document.createElement('button');
+        retryButton.className = 'flsvalidation-btn flsvalidation-btn-primary';
+        retryButton.textContent = 'Try Again';
+        retryButton.onclick = () => {
+          elements.manualVerification.style.display = 'none';
+          startSecurityValidation();
+        };
+        elements.manualVerification.appendChild(retryButton);
+      }, 1000);
     }
   }
   
@@ -945,8 +955,8 @@ document.addEventListener('DOMContentLoaded', function() {
       
       const result = await response.json();
       
-      if (response.ok && result.success) {
-        // Success! Show completion and redirect
+      if (response.ok && result.success && result.verified === true) {
+        // Only proceed if explicitly verified by server
         showSuccessAndRedirect();
       } else if (result.requiresManualVerification) {
         // Risk score too low, show manual verification
@@ -956,7 +966,23 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     } catch (error) {
       console.error('Token verification failed:', error);
-      showManualVerification(validationResult);
+      // SECURITY: On verification failure, show error - never auto-approve
+      showValidationStatus('error', '❌ Verification Failed', 
+        'Security verification could not be completed. Please try again.');
+      
+      // Provide retry option instead of fallback
+      setTimeout(() => {
+        const retryContainer = document.createElement('div');
+        retryContainer.innerHTML = `
+          <button class="flsvalidation-btn flsvalidation-btn-primary" onclick="startSecurityValidation()">
+            Try Again
+          </button>
+          <button class="flsvalidation-btn flsvalidation-btn-secondary" onclick="closeValidationModal()">
+            Cancel
+          </button>
+        `;
+        elements.validationStatus.appendChild(retryContainer);
+      }, 1000);
     }
   }
   
@@ -988,20 +1014,70 @@ document.addEventListener('DOMContentLoaded', function() {
   function renderManualCaptchaWidget() {
     try {
       if (elements.manualCaptcha && typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
+        // Try to render manual widget - handle key type compatibility
         window.flsvalidationManualWidgetId = grecaptcha.enterprise.render(elements.manualCaptcha, {
           'sitekey': RECAPTCHA_SITE_KEY,
           'callback': onManualRecaptchaCallback,
           'expired-callback': onManualRecaptchaExpired,
-          'error-callback': onRecaptchaError,
+          'error-callback': function(error) {
+            console.error('Manual reCAPTCHA error:', error);
+            // If checkbox fails due to key type, show invisible fallback
+            if (error.includes && error.includes('Invalid key type')) {
+              showInvisibleFallback();
+            } else {
+              showVerificationError();
+            }
+          },
           'theme': 'light',
           'size': 'normal'
         });
       }
     } catch (error) {
       console.error('Failed to render manual reCAPTCHA:', error);
-      // If all else fails, just proceed
-      setTimeout(() => showSuccessAndRedirect(), 2000);
+      // SECURITY: Never auto-proceed on reCAPTCHA failure
+      showVerificationError();
     }
+  }
+  
+  function showInvisibleFallback() {
+    elements.manualCaptcha.innerHTML = `
+      <div class="flsvalidation-invisible-fallback">
+        <p>🔒 Click to complete security verification</p>
+        <button id="flsvalidation-invisible-execute" class="flsvalidation-btn flsvalidation-btn-primary">
+          Complete Verification
+        </button>
+      </div>
+    `;
+    
+    document.getElementById('flsvalidation-invisible-execute').onclick = async function() {
+      this.disabled = true;
+      this.textContent = 'Verifying...';
+      try {
+        const token = await executeInvisibleRecaptcha();
+        if (token) {
+          await submitCaptchaToken(token, {});
+        } else {
+          showVerificationError();
+        }
+      } catch (error) {
+        showVerificationError();
+      }
+    };
+  }
+  
+  function showVerificationError() {
+    showValidationStatus('error', '❌ Verification Error', 
+      'Unable to complete security verification. Please contact support if this continues.');
+    
+    // Provide contact support option instead of proceeding
+    elements.manualVerification.innerHTML = `
+      <div class="flsvalidation-support-contact">
+        <p>If you continue experiencing issues, please contact our support team.</p>
+        <button class="flsvalidation-btn flsvalidation-btn-secondary" onclick="closeValidationModal()">
+          Close
+        </button>
+      </div>
+    `;
   }
   
   window.onManualRecaptchaCallback = function(response) {
@@ -1016,6 +1092,8 @@ document.addEventListener('DOMContentLoaded', function() {
   
   async function handleManualCaptchaSubmit() {
     if (!window.flsvalidationManualResponse) {
+      showValidationStatus('warning', '⚠️ Please complete the verification', 
+        'Click the checkbox above to verify you are human.');
       return;
     }
     
@@ -1028,6 +1106,8 @@ document.addEventListener('DOMContentLoaded', function() {
       console.error('Manual verification failed:', error);
       elements.manualSubmit.disabled = false;
       elements.manualSubmit.textContent = 'Complete Verification';
+      showValidationStatus('error', '❌ Verification Failed', 
+        'Please try again or contact support if the issue persists.');
     }
   }
 
