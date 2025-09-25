@@ -771,8 +771,105 @@ document.addEventListener('DOMContentLoaded', function() {
     if (state.currentTotal < state.minimumOrderValue) {
       showMinimumOrderModal();
     } else {
+      // First check user risk level to determine flow
+      checkUserRiskAndProceed();
+    }
+  }
+
+  async function checkUserRiskAndProceed() {
+    try {
+      // Check user risk level first
+      const response = await fetch(`${CONFIG.API_BASE_URL}/validate-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: state.sessionId,
+          cartValue: state.currentTotal,
+          cartItems: state.cartItems,
+          userAgent: navigator.userAgent
+        })
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Validation failed');
+      }
+
+      state.validationId = result.validationId;
+      state.requiresCaptcha = result.requiresCaptcha;
+
+      // For low-risk users (recommendation: 'allow'), proceed directly to checkout
+      if (!result.requiresCaptcha && !result.blocked && result.recommendation === 'allow') {
+        console.log('[Cart Validation] Low risk user detected - proceeding directly to checkout');
+        await proceedDirectlyToCheckout(result);
+      } else {
+        // For medium/high-risk users, show the modal and CAPTCHA
+        console.log('[Cart Validation] Risk detected - showing validation modal');
+        showValidationModal();
+        startSecurityValidation(result);
+      }
+    } catch (error) {
+      console.error('Risk check error:', error);
+      // On error, default to showing validation modal for security
       showValidationModal();
       startSecurityValidation();
+    }
+  }
+
+  async function proceedDirectlyToCheckout(validationResult) {
+    try {
+      // For low-risk users, automatically complete validation in background
+      console.log('[Cart Validation] Auto-completing validation for low-risk user');
+      
+      // Generate invisible reCAPTCHA token for backend verification
+      if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise && RECAPTCHA_SITE_KEY) {
+        await grecaptcha.enterprise.ready();
+        
+        const token = await grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, {
+          action: 'checkout_validation'
+        });
+        
+        if (token) {
+          // Submit token to backend for verification
+          const verifyResponse = await fetch(`${CONFIG.API_BASE_URL}/captcha`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              validationId: state.validationId,
+              captchaResponse: token,
+              captchaType: 'recaptcha'
+            })
+          });
+          
+          const verifyResult = await verifyResponse.json();
+          
+          if (verifyResponse.ok && verifyResult.success === true) {
+            // Track the validation success
+            await trackCheckoutProceed();
+            
+            // Proceed directly to checkout
+            proceedToShopifyCheckout();
+          } else {
+            throw new Error('Background verification failed');
+          }
+        } else {
+          throw new Error('Failed to generate background token');
+        }
+      } else {
+        throw new Error('reCAPTCHA not available for background validation');
+      }
+    } catch (error) {
+      console.error('[Cart Validation] Background validation failed:', error);
+      console.log('[Cart Validation] Falling back to modal flow');
+      
+      // Fall back to showing the modal if background validation fails
+      showValidationModal();
+      startSecurityValidation(validationResult);
     }
   }
 
@@ -847,7 +944,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  async function startSecurityValidation() {
+  async function startSecurityValidation(validationResult = null) {
     elements.modalTitleText.textContent = 'Securing Your Checkout';
     showSection('captcha');
     updateProgress(1, 20);
@@ -856,27 +953,36 @@ document.addEventListener('DOMContentLoaded', function() {
     showValidationStatus('loading', '🔍 Checking cart', 'Validating your order details.');
     
     try {
-      // Step 1: Cart validation
-      await new Promise(resolve => setTimeout(resolve, 800)); // Smooth UX timing
-      updateProgress(2, 50);
+      let result;
       
-      const response = await fetch(`${CONFIG.API_BASE_URL}/validate-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId: state.sessionId,
-          cartValue: state.currentTotal,
-          cartItems: state.cartItems,
-          userAgent: navigator.userAgent
-        })
-      });
+      if (validationResult) {
+        // Use the provided validation result (avoid duplicate API call)
+        result = validationResult;
+        console.log('[Cart Validation] Using provided validation result');
+      } else {
+        // Fallback: make API call if no result provided
+        console.log('[Cart Validation] Making fallback API call');
+        await new Promise(resolve => setTimeout(resolve, 800)); // Smooth UX timing
+        updateProgress(2, 50);
+        
+        const response = await fetch(`${CONFIG.API_BASE_URL}/validate-user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionId: state.sessionId,
+            cartValue: state.currentTotal,
+            cartItems: state.cartItems,
+            userAgent: navigator.userAgent
+          })
+        });
 
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.error || 'Validation failed');
+        result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Validation failed');
+        }
       }
 
       state.validationId = result.validationId;
@@ -1124,21 +1230,21 @@ document.addEventListener('DOMContentLoaded', function() {
   
   async function submitCaptchaToken(token, validationResult) {
     try {
-      const response = await fetch(`${CONFIG.API_BASE_URL}/verify-captcha`, {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/captcha`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          token: token,
           validationId: state.validationId,
-          action: 'checkout_validation'
+          captchaResponse: token,
+          captchaType: 'recaptcha'
         })
       });
       
       const result = await response.json();
       
-      if (response.ok && result.success && result.verified === true) {
+      if (response.ok && result.success === true) {
         // Only proceed if explicitly verified by server
         showSuccessAndRedirect();
       } else if (result.requiresManualVerification) {
