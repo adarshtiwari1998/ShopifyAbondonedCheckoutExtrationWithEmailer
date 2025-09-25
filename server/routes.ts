@@ -122,8 +122,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         riskScore: ipValidation.riskScore,
         recommendation: ipValidation.recommendation,
         riskFactors: ipValidation.riskFactors,
-        requiresCaptcha: ipValidation.recommendation === 'challenge',
-        blocked: ipValidation.recommendation === 'block',
+        requiresCaptcha: ipValidation.recommendation !== 'allow', // Show manual CAPTCHA for medium/high risk
+        blocked: false, // Don't block any users - always allow manual CAPTCHA option
         location: {
           country: ipValidation.locationData.country,
           city: ipValidation.locationData.city,

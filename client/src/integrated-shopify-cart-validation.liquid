@@ -916,13 +916,13 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   function showCaptchaWidget(validationResult) {
-    // Show different messaging based on risk level
+    // Show different messaging based on risk level (location removed from frontend display)
     if (validationResult.requiresCaptcha) {
       showValidationStatus('warning', '🛡️ Security Verification Required', 
-        `Location: ${validationResult.location?.city || 'Unknown'}, ${validationResult.location?.country || 'Unknown'} - Additional verification needed`);
+        'Additional verification needed for secure checkout.');
     } else {
       showValidationStatus('loading', '🔐 Completing Security Verification', 
-        `Verified from ${validationResult.location?.city || 'Unknown'}, ${validationResult.location?.country || 'Unknown'} - Finalizing your secure checkout`);
+        'Processing your secure checkout verification automatically.');
     }
     
     // CRITICAL: Show the reCAPTCHA container
@@ -963,11 +963,11 @@ document.addEventListener('DOMContentLoaded', function() {
           
           console.log('[reCAPTCHA Enterprise] Checkbox widget rendered successfully');
           
-          // If low risk, auto-tick the checkbox after a brief moment
+          // If low risk, auto-complete the entire CAPTCHA process
           if (!requiresManualCheck) {
             setTimeout(() => {
-              autoTickRecaptcha();
-            }, 1500); // Wait 1.5 seconds then auto-tick
+              autoCompleteValidation();
+            }, 1500); // Wait 1.5 seconds then auto-complete
           }
         } catch (error) {
           console.error('[reCAPTCHA Enterprise] Error rendering widget:', error);
@@ -1040,6 +1040,44 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (error) {
       console.error('[reCAPTCHA] Auto-tick failed:', error);
       // If auto-tick fails, user can still manually click
+    }
+  }
+
+  async function autoCompleteValidation() {
+    try {
+      showValidationStatus('loading', '🔐 Completing verification automatically', 
+        'Low risk detected - processing your secure checkout...');
+      
+      console.log('[reCAPTCHA] Auto-completing validation for low-risk user');
+      
+      // Use invisible reCAPTCHA for automatic token generation
+      if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise && RECAPTCHA_SITE_KEY) {
+        await grecaptcha.enterprise.ready();
+        
+        const token = await grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, {
+          action: 'checkout_validation'
+        });
+        
+        if (token) {
+          window.flsvalidationRecaptchaResponse = token;
+          console.log('[reCAPTCHA] Auto-generated token for low-risk user');
+          
+          // Automatically submit the CAPTCHA
+          await handleCaptchaSubmit();
+        } else {
+          throw new Error('Failed to generate auto-token');
+        }
+      } else {
+        throw new Error('reCAPTCHA not available for auto-completion');
+      }
+    } catch (error) {
+      console.error('[reCAPTCHA] Auto-completion failed:', error);
+      console.log('[reCAPTCHA] Falling back to manual verification');
+      
+      // Fall back to showing manual CAPTCHA
+      showValidationStatus('warning', '🛡️ Manual verification required', 
+        'Please complete the verification manually.');
+      elements.captchaContainer.style.display = 'block';
     }
   }
   

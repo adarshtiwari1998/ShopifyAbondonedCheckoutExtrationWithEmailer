@@ -38,51 +38,49 @@ export interface IpValidationResult {
 }
 
 export class IpGeolocationService {
-  private apiKey: string;
-  private apiUrl: string = 'https://ipgeolocation.abstractapi.com/v1/';
+  private apiUrl: string = 'https://ipwho.is/';
   
   constructor() {
-    this.apiKey = process.env.ABSTRACT_API_IP_GEOLOCATION_KEY || 'demo-key';
+    // IPWho.org doesn't require an API key - completely free and unlimited
+    console.log('[IP Geolocation] Using IPWho.org - unlimited free IP geolocation service');
   }
 
   async getLocationData(ipAddress: string): Promise<IpGeolocationData> {
     try {
-      // Use real AbstractAPI if key is available
-      if (this.apiKey === 'demo-key' || !this.apiKey) {
-        console.log('[IP Geolocation] Using mock data - no AbstractAPI key configured');
-        return this.getMockLocationData(ipAddress);
-      }
-
-      console.log(`[IP Geolocation] Fetching real location data for IP: ${ipAddress}`);
+      console.log(`[IP Geolocation] Fetching location data for IP: ${ipAddress} using IPWho.org`);
       
-      const response = await fetch(`${this.apiUrl}?api_key=${this.apiKey}&ip_address=${ipAddress}`, {
+      // IPWho.org endpoint - completely free and unlimited
+      const response = await fetch(`${this.apiUrl}${ipAddress}`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'User-Agent': 'ShopifyCartValidation/1.0'
         }
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[IP Geolocation] AbstractAPI error: ${response.status} - ${errorText}`);
+        console.error(`[IP Geolocation] IPWho.org error: ${response.status} - ${errorText}`);
         throw new Error(`IP Geolocation API error: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log(`[IP Geolocation] AbstractAPI response:`, JSON.stringify(data, null, 2));
+      console.log(`[IP Geolocation] IPWho.org response:`, JSON.stringify(data, null, 2));
+      
+      // Check if the API returned valid data
+      if (!data.success && data.success !== undefined) {
+        console.warn(`[IP Geolocation] IPWho.org returned error: ${data.message}`);
+        return this.getMockLocationData(ipAddress);
+      }
       
       const transformedData = this.transformApiResponse(data);
-      console.log(`[IP Geolocation] Real location result:`, JSON.stringify(transformedData, null, 2));
+      console.log(`[IP Geolocation] Transformed location result:`, JSON.stringify(transformedData, null, 2));
       
       return transformedData;
     } catch (error) {
       console.error('Error fetching IP geolocation:', error);
-      // Return basic data for fallback
-      return {
-        ip: ipAddress,
-        country: 'Unknown',
-        threat_level: 'low'
-      };
+      console.log('[IP Geolocation] Falling back to mock data');
+      return this.getMockLocationData(ipAddress);
     }
   }
 
@@ -206,33 +204,37 @@ export class IpGeolocationService {
   }
 
   private transformApiResponse(data: any): IpGeolocationData {
+    // Transform IPWho.org response format to our standard format
     return {
-      ip: data.ip_address,
+      ip: data.ip,
       country: data.country,
       country_code: data.country_code,
       region: data.region,
       city: data.city,
-      zip_code: data.postal_code,
+      zip_code: data.postal,
       latitude: data.latitude ? data.latitude.toString() : undefined,
       longitude: data.longitude ? data.longitude.toString() : undefined,
-      timezone: data.timezone?.name,
-      timezone_name: data.timezone?.name,
-      timezone_gmt_offset: data.timezone?.gmt_offset,
-      currency: data.currency?.name,
-      isp: data.connection?.isp_name,
-      connection_type: data.connection?.connection_type,
-      organization: data.connection?.organization_name,
-      is_vpn: data.security?.is_vpn || false,
-      is_proxy: data.security?.is_proxy || false,
-      is_tor: data.security?.is_tor || false,
-      threat_level: this.calculateThreatLevel(data.security),
+      timezone: data.timezone?.id,
+      timezone_name: data.timezone?.id,
+      timezone_gmt_offset: data.timezone?.offset ? data.timezone.offset / 3600 : undefined,
+      currency: data.currency?.currency_code,
+      isp: data.connection?.isp,
+      connection_type: this.inferConnectionType(data.connection?.org, data.connection?.isp),
+      organization: data.connection?.org,
+      // IPWho.org doesn't provide VPN/Proxy detection, so we'll analyze ISP
+      is_vpn: this.detectVpnFromIsp(data.connection?.isp, data.connection?.org),
+      is_proxy: false, // Would need additional service for proxy detection
+      is_tor: false, // Would need additional service for Tor detection
+      threat_level: this.calculateThreatLevel(null),
       // Store detailed ISP routing info for backend only (hidden from frontend)
       internal_isp_data: {
-        autonomous_system_number: data.connection?.autonomous_system_number,
-        routing_domain: data.connection?.routing_domain,
+        autonomous_system_number: data.connection?.asn?.toString(),
+        routing_domain: data.connection?.domain,
         network_details: {
-          asn: data.connection?.autonomous_system_number,
-          isp_details: data.connection
+          asn: data.connection?.asn,
+          isp_details: data.connection,
+          flag_info: data.flag,
+          timezone_info: data.timezone
         }
       }
     };
@@ -264,5 +266,43 @@ export class IpGeolocationService {
     ];
     
     return botPatterns.some(pattern => pattern.test(userAgent));
+  }
+
+  private inferConnectionType(org?: string, isp?: string): string {
+    if (!org && !isp) return 'Unknown';
+    
+    const text = `${org || ''} ${isp || ''}`.toLowerCase();
+    
+    if (text.includes('mobile') || text.includes('cellular') || text.includes('wireless')) {
+      return 'Cellular';
+    }
+    if (text.includes('satellite')) {
+      return 'Satellite';
+    }
+    if (text.includes('cable') || text.includes('broadband')) {
+      return 'Cable';
+    }
+    if (text.includes('dsl') || text.includes('adsl')) {
+      return 'DSL';
+    }
+    if (text.includes('fiber') || text.includes('fibre')) {
+      return 'Fiber';
+    }
+    
+    return 'Residential';
+  }
+
+  private detectVpnFromIsp(isp?: string, org?: string): boolean {
+    if (!isp && !org) return false;
+    
+    const text = `${isp || ''} ${org || ''}`.toLowerCase();
+    const vpnKeywords = [
+      'vpn', 'virtual private network', 'private internet access',
+      'nordvpn', 'expressvpn', 'surfshark', 'cyberghost', 'tunnel',
+      'proxy', 'anonymizer', 'hide', 'secure connection',
+      'private network', 'encrypted'
+    ];
+    
+    return vpnKeywords.some(keyword => text.includes(keyword));
   }
 }
