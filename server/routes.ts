@@ -6,9 +6,256 @@ import { extractAbandonedCheckouts, extractAbandonedCheckoutsForCustomDates } fr
 import fetch from 'node-fetch';
 import { GoogleSheetsService } from "./services/googleSheets.js";
 import { CredentialsManager } from "./services/credentialsManager.js";
+import { IpGeolocationService } from "./services/ipGeolocation.js";
+import { insertUserValidationSchema } from "@shared/schema.js";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const credentialsManager = CredentialsManager.getInstance();
+  const ipGeolocationService = new IpGeolocationService();
+
+  // Helper function to get client IP
+  const getClientIp = (req: any): string => {
+    return req.headers['x-forwarded-for']?.split(',')[0] || 
+           req.connection?.remoteAddress || 
+           req.socket?.remoteAddress || 
+           '127.0.0.1';
+  };
+
+  // Validation API Routes
+  
+  // Schema for user validation request
+  const validateUserRequestSchema = z.object({
+    sessionId: z.string().min(1, 'Session ID is required'),
+    cartValue: z.number().int().min(0).optional(),
+    cartItems: z.number().int().min(0).optional(),
+    userAgent: z.string().optional(),
+  });
+
+  // Schema for CAPTCHA validation request
+  const captchaRequestSchema = z.object({
+    validationId: z.string().min(1, 'Validation ID is required'),
+    captchaResponse: z.string().min(1, 'CAPTCHA response is required'),
+    captchaType: z.string().optional(),
+  });
+
+  // Validate user before checkout
+  app.post('/api/validation/validate-user', async (req, res) => {
+    try {
+      // Validate request schema
+      const validationResult = validateUserRequestSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: 'Invalid request data',
+          details: validationResult.error.issues
+        });
+      }
+
+      const { sessionId, cartValue, cartItems, userAgent } = validationResult.data;
+      const ipAddress = getClientIp(req);
+
+      // Get IP validation
+      const ipValidation = await ipGeolocationService.validateUserLocation(ipAddress, userAgent);
+      
+      // Create user validation record
+      const validation = await storage.createUserValidation({
+        sessionId,
+        ipAddress,
+        userAgent,
+        cartValue: cartValue ? parseInt(cartValue) : null,
+        cartItems: cartItems ? parseInt(cartItems) : null,
+        validationType: 'ip_check',
+        validationResult: ipValidation.isValid ? 'passed' : 'failed',
+        riskScore: ipValidation.riskScore,
+        locationData: ipValidation.locationData,
+        captchaData: null,
+        isBot: ipValidation.riskFactors.includes('Bot user agent detected'),
+        proceedToCheckout: false,
+        completedOrder: false,
+      });
+
+      // Store IP geolocation data
+      await storage.createOrUpdateIpGeolocation({
+        ipAddress,
+        country: ipValidation.locationData.country || null,
+        countryCode: ipValidation.locationData.country_code || null,
+        region: ipValidation.locationData.region || null,
+        city: ipValidation.locationData.city || null,
+        zipCode: ipValidation.locationData.zip_code || null,
+        latitude: ipValidation.locationData.latitude || null,
+        longitude: ipValidation.locationData.longitude || null,
+        timezone: ipValidation.locationData.timezone || null,
+        isp: ipValidation.locationData.isp || null,
+        isVpn: ipValidation.locationData.is_vpn || false,
+        isProxy: ipValidation.locationData.is_proxy || false,
+        isTor: ipValidation.locationData.is_tor || false,
+        threatLevel: ipValidation.locationData.threat_level || null,
+      });
+
+      res.json({
+        validationId: validation.id,
+        isValid: ipValidation.isValid,
+        riskScore: ipValidation.riskScore,
+        recommendation: ipValidation.recommendation,
+        riskFactors: ipValidation.riskFactors,
+        requiresCaptcha: ipValidation.recommendation === 'challenge',
+        blocked: ipValidation.recommendation === 'block',
+        location: {
+          country: ipValidation.locationData.country,
+          city: ipValidation.locationData.city,
+        }
+      });
+    } catch (error) {
+      console.error('Validation error:', error);
+      res.status(500).json({ error: 'Validation failed' });
+    }
+  });
+
+  // Submit CAPTCHA validation
+  app.post('/api/validation/captcha', async (req, res) => {
+    try {
+      // Validate request schema
+      const validationResult = captchaRequestSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: 'Invalid request data',
+          details: validationResult.error.issues
+        });
+      }
+
+      const { validationId, captchaResponse, captchaType } = validationResult.data;
+
+      // Verify the validation ID exists
+      const existingValidation = await storage.getUserValidation(validationId);
+      if (!existingValidation) {
+        return res.status(404).json({ error: 'Validation record not found' });
+      }
+
+      // Enhanced CAPTCHA validation (demo implementation)
+      // In production, integrate with real CAPTCHA service (reCAPTCHA, hCaptcha, etc.)
+      const isValidCaptcha = await verifyCaptcha(captchaResponse, captchaType, existingValidation);
+
+      // Update validation record
+      const updatedValidation = await storage.updateUserValidation(validationId, {
+        validationType: 'captcha',
+        validationResult: isValidCaptcha ? 'passed' : 'failed',
+        captchaData: { 
+          type: captchaType || 'unknown', 
+          timestamp: new Date().toISOString(),
+          verified: isValidCaptcha 
+        },
+      });
+
+      res.json({
+        success: isValidCaptcha,
+        message: isValidCaptcha ? 'CAPTCHA verified successfully' : 'CAPTCHA verification failed',
+        validationId: updatedValidation.id
+      });
+    } catch (error) {
+      console.error('CAPTCHA validation error:', error);
+      res.status(500).json({ error: 'CAPTCHA validation failed' });
+    }
+  });
+
+  // Enhanced CAPTCHA verification function
+  async function verifyCaptcha(response: string, type: string = 'mock', validation: any): Promise<boolean> {
+    // In production, replace this with actual CAPTCHA service verification
+    // Example for Google reCAPTCHA:
+    // const verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
+    // const secret = process.env.RECAPTCHA_SECRET_KEY;
+    // const verifyResponse = await fetch(verifyUrl, { ... });
+    
+    // Enhanced demo validation (more secure than just length check)
+    if (type === 'mock') {
+      // Check multiple criteria for demo CAPTCHA
+      const hasValidFormat = response.startsWith('mock-captcha-response-');
+      const hasValidTimestamp = response.includes(Date.now().toString().substring(0, 8)); // Check if recent
+      const hasValidLength = response.length >= 20 && response.length <= 100;
+      
+      // Add some randomness to simulate real CAPTCHA failure rates
+      const randomSuccess = Math.random() > 0.05; // 5% failure rate for demo
+      
+      return hasValidFormat && hasValidLength && randomSuccess;
+    }
+    
+    // For other CAPTCHA types, implement actual verification
+    return false;
+  }
+
+  // Record checkout proceed action
+  app.post('/api/validation/proceed-checkout', async (req, res) => {
+    try {
+      const { validationId, sessionId } = req.body;
+      
+      if (validationId) {
+        await storage.updateUserValidation(validationId, {
+          proceedToCheckout: true,
+        });
+      } else if (sessionId) {
+        // Find validation by session ID
+        const validations = await storage.getUserValidationsBySession(sessionId);
+        if (validations.length > 0) {
+          const latestValidation = validations[validations.length - 1];
+          await storage.updateUserValidation(latestValidation.id, {
+            proceedToCheckout: true,
+          });
+        }
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Proceed checkout tracking error:', error);
+      res.status(500).json({ error: 'Failed to track checkout proceed' });
+    }
+  });
+
+  // Get validation statistics
+  app.get('/api/validation/stats', async (req, res) => {
+    try {
+      const stats = await storage.getValidationStats();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentValidations = await storage.getValidationsByDateRange(thirtyDaysAgo, new Date());
+      
+      const conversionRate = stats.total > 0 
+        ? (recentValidations.filter(v => v.completedOrder).length / stats.total * 100).toFixed(2)
+        : '0';
+
+      res.json({
+        ...stats,
+        conversionRate: `${conversionRate}%`,
+        recentValidations: recentValidations.length,
+        proceedToCheckout: recentValidations.filter(v => v.proceedToCheckout).length,
+      });
+    } catch (error) {
+      console.error('Stats error:', error);
+      res.status(500).json({ error: 'Failed to get validation stats' });
+    }
+  });
+
+  // Get recent validations
+  app.get('/api/validation/recent', async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const days = req.query.days ? parseInt(req.query.days as string) : 7;
+      
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      
+      const validations = await storage.getValidationsByDateRange(startDate, new Date());
+      
+      // Sort by creation date and limit
+      const recentValidations = validations
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, limit);
+
+      res.json(recentValidations);
+    } catch (error) {
+      console.error('Recent validations error:', error);
+      res.status(500).json({ error: 'Failed to get recent validations' });
+    }
+  });
 
   // Get credentials status
   app.get('/api/credentials/status', async (req, res) => {

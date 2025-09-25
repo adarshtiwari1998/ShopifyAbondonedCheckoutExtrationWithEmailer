@@ -5,11 +5,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import ExtractionDashboard from "@/pages/extraction-dashboard";
+import ValidationDashboard from "@/pages/validation-dashboard";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={ExtractionDashboard} />
+      <Route path="/validation" component={ValidationDashboard} />
       <Route component={NotFound} />
     </Switch>
   );
