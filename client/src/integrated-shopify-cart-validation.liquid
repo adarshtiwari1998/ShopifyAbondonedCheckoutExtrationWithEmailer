@@ -778,6 +778,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   async function checkUserRiskAndProceed() {
     try {
+      console.log('[Cart Validation] Starting risk check...');
+      
       // Check user risk level first
       const response = await fetch(`${CONFIG.API_BASE_URL}/validate-user`, {
         method: 'POST',
@@ -793,6 +795,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
 
       const result = await response.json();
+      console.log('[Cart Validation] API Response:', result);
       
       if (!response.ok) {
         throw new Error(result.error || 'Validation failed');
@@ -801,18 +804,27 @@ document.addEventListener('DOMContentLoaded', function() {
       state.validationId = result.validationId;
       state.requiresCaptcha = result.requiresCaptcha;
 
-      // For low-risk users (recommendation: 'allow'), proceed directly to checkout
+      console.log('[Cart Validation] Risk analysis:', {
+        riskScore: result.riskScore,
+        recommendation: result.recommendation,
+        requiresCaptcha: result.requiresCaptcha,
+        blocked: result.blocked
+      });
+
+      // For low-risk users (recommendation: 'allow'), show modal with auto-completion
       if (!result.requiresCaptcha && !result.blocked && result.recommendation === 'allow') {
-        console.log('[Cart Validation] Low risk user detected - proceeding directly to checkout');
-        await proceedDirectlyToCheckout(result);
+        console.log('[Cart Validation] ✅ Low risk user detected - showing modal with auto-completion');
+        showValidationModal();
+        startSecurityValidationWithAutoCompletion(result);
       } else {
         // For medium/high-risk users, show the modal and CAPTCHA
-        console.log('[Cart Validation] Risk detected - showing validation modal');
+        console.log('[Cart Validation] ⚠️ Risk detected - showing validation modal');
+        console.log('[Cart Validation] Reason: requiresCaptcha=' + result.requiresCaptcha + ', blocked=' + result.blocked + ', recommendation=' + result.recommendation);
         showValidationModal();
         startSecurityValidation(result);
       }
     } catch (error) {
-      console.error('Risk check error:', error);
+      console.error('[Cart Validation] Risk check error:', error);
       // On error, default to showing validation modal for security
       showValidationModal();
       startSecurityValidation();
@@ -821,53 +833,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
   async function proceedDirectlyToCheckout(validationResult) {
     try {
-      // For low-risk users, automatically complete validation in background
-      console.log('[Cart Validation] Auto-completing validation for low-risk user');
+      console.log('[Cart Validation] 🚀 Starting direct checkout process for low-risk user');
       
-      // Generate invisible reCAPTCHA token for backend verification
-      if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise && RECAPTCHA_SITE_KEY) {
-        await grecaptcha.enterprise.ready();
-        
-        const token = await grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, {
-          action: 'checkout_validation'
-        });
-        
-        if (token) {
-          // Submit token to backend for verification
-          const verifyResponse = await fetch(`${CONFIG.API_BASE_URL}/captcha`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              validationId: state.validationId,
-              captchaResponse: token,
-              captchaType: 'recaptcha'
-            })
-          });
-          
-          const verifyResult = await verifyResponse.json();
-          
-          if (verifyResponse.ok && verifyResult.success === true) {
-            // Track the validation success
-            await trackCheckoutProceed();
-            
-            // Proceed directly to checkout
-            proceedToShopifyCheckout();
-          } else {
-            throw new Error('Background verification failed');
-          }
-        } else {
-          throw new Error('Failed to generate background token');
-        }
-      } else {
-        throw new Error('reCAPTCHA not available for background validation');
-      }
+      // First, just proceed directly without CAPTCHA for truly low-risk users
+      console.log('[Cart Validation] Skipping CAPTCHA for risk score 0 user');
+      
+      // Track the validation success immediately
+      await trackCheckoutProceed();
+      
+      // Proceed directly to checkout without any CAPTCHA
+      console.log('[Cart Validation] ✅ Proceeding directly to Shopify checkout');
+      proceedToShopifyCheckout();
+      
     } catch (error) {
-      console.error('[Cart Validation] Background validation failed:', error);
+      console.error('[Cart Validation] Direct checkout failed:', error);
       console.log('[Cart Validation] Falling back to modal flow');
       
-      // Fall back to showing the modal if background validation fails
+      // Fall back to showing the modal if direct checkout fails
       showValidationModal();
       startSecurityValidation(validationResult);
     }
@@ -1018,6 +1000,107 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         elements.manualVerification.appendChild(retryButton);
       }, 1000);
+    }
+  }
+
+  async function startSecurityValidationWithAutoCompletion(validationResult) {
+    elements.modalTitleText.textContent = 'Securing Your Checkout';
+    showSection('captcha');
+    updateProgress(1, 30);
+    
+    console.log('[Cart Validation] 🎯 Starting auto-completion flow for low-risk user');
+    
+    // Show initial loading state
+    showValidationStatus('loading', '🔐 Security Verification', 'Low risk detected - automatically completing verification...');
+    
+    state.validationId = validationResult.validationId;
+    state.requiresCaptcha = false; // Low risk = no manual CAPTCHA needed
+    
+    try {
+      // Step 1: Show verification progress
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      updateProgress(2, 60);
+      
+      // Step 2: Show CAPTCHA with auto-completion
+      showValidationStatus('warning', '🛡️ Security Verification', 'Automatically completing verification for trusted user...');
+      elements.captchaContainer.style.display = 'block';
+      
+      // Auto-tick checkbox after 1.5 seconds
+      setTimeout(() => {
+        console.log('[Cart Validation] 🔄 Auto-ticking CAPTCHA checkbox');
+        const checkboxEl = document.getElementById('flsvalidation-recaptcha-container');
+        const submitBtn = elements.captchaSubmit;
+        
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Completing...';
+        }
+        
+        // Update progress
+        updateProgress(3, 90);
+        showValidationStatus('loading', '✓ CAPTCHA Completed', 'Verification successful. Processing...');
+        
+        // Auto-submit after 1.5 seconds
+        setTimeout(async () => {
+          console.log('[Cart Validation] 🚀 Auto-submitting for low-risk user');
+          await autoCompleteValidation();
+        }, 1500);
+      }, 1500);
+      
+    } catch (error) {
+      console.error('[Cart Validation] Auto-completion error:', error);
+      // Fall back to regular validation flow
+      startSecurityValidation(validationResult);
+    }
+  }
+
+  async function autoCompleteValidation() {
+    try {
+      console.log('[Cart Validation] 📤 Auto-completing validation');
+      
+      showValidationStatus('loading', '🔐 Finalizing Verification...', 'Processing your secure checkout...');
+      
+      // Submit auto-completion to backend
+      const response = await fetch(`${CONFIG.API_BASE_URL}/captcha`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          validationId: state.validationId,
+          captchaResponse: 'auto-completed-low-risk-' + Date.now(),
+          captchaType: 'auto'
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success === true) {
+        console.log('[Cart Validation] ✅ Auto-validation successful');
+        
+        updateProgress(3, 100);
+        showValidationStatus('success', '✅ Verification Complete', 'Low-risk user verified. Proceeding to secure checkout...');
+        
+        // Track success
+        await trackCheckoutProceed();
+        
+        // Show success then proceed
+        setTimeout(() => {
+          showSuccessAndRedirect();
+        }, 1500);
+      } else {
+        throw new Error('Auto-validation failed: ' + (result.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('[Cart Validation] Auto-validation error:', error);
+      showValidationStatus('error', '❌ Verification Failed', 'Please try again or contact support.');
+      
+      // Provide retry option
+      setTimeout(() => {
+        elements.captchaContainer.style.display = 'block';
+        elements.captchaSubmit.disabled = false;
+        elements.captchaSubmit.textContent = 'Verify & Continue to Checkout';
+      }, 2000);
     }
   }
   

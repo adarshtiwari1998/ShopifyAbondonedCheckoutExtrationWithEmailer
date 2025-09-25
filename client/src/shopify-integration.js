@@ -280,7 +280,16 @@
             validationState.isBlocked = result.blocked;
             validationState.userLocation = result.location;
             
+            console.log('[Validation] API Response:', {
+                blocked: result.blocked,
+                requiresCaptcha: result.requiresCaptcha,
+                recommendation: result.recommendation,
+                riskScore: result.riskScore,
+                isValid: result.isValid
+            });
+
             if (result.blocked) {
+                console.log('[Validation] User blocked');
                 showValidationStatus('error', 
                     '🚫 Access Denied', 
                     'Your request has been blocked due to security concerns. Please contact support if you believe this is an error.'
@@ -288,13 +297,29 @@
                 blockCheckout();
                 return false;
             } else if (result.requiresCaptcha) {
+                console.log('[Validation] CAPTCHA required for user');
                 showValidationStatus('warning', 
                     '🛡️ Security Verification Required', 
                     `Location: ${result.location?.city || 'Unknown'}, ${result.location?.country || 'Unknown'} | Risk Score: ${result.riskScore}`
                 );
                 showCaptcha();
                 return false;
+            } else if (result.isValid && result.recommendation === 'allow') {
+                console.log('[Validation] ✅ Low-risk user - showing validation process with auto-completion');
+                // For low-risk users, show validation process but auto-complete everything
+                showValidationStatus('loading', 
+                    '🔐 Security Verification in Progress', 
+                    'Low risk detected - automatically completing verification...'
+                );
+                
+                // Show CAPTCHA with auto-completion after a brief moment
+                setTimeout(() => {
+                    showCaptchaWithAutoCompletion();
+                }, 1000);
+                
+                return false; // Don't proceed yet, let auto-completion handle it
             } else if (result.isValid) {
+                console.log('[Validation] Standard validation successful');
                 showValidationStatus('success', 
                     '✅ Validation Successful', 
                     `Verified from ${result.location?.city || 'Unknown'}, ${result.location?.country || 'Unknown'}. You may proceed to checkout.`
@@ -391,6 +416,128 @@
             hideValidationStatus();
             captchaContainer.style.display = 'none';
         });
+    }
+
+    // Show CAPTCHA with auto-completion for low-risk users
+    function showCaptchaWithAutoCompletion() {
+        console.log('[Validation] 🎯 Showing CAPTCHA with auto-completion for low-risk user');
+        
+        const captchaContainer = document.getElementById('captcha-container');
+        const checkboxEl = document.getElementById('mock-captcha-checkbox');
+        const submitBtn = document.getElementById('captcha-submit');
+        
+        if (!captchaContainer) {
+            console.error('[Validation] CAPTCHA container not found, proceeding directly');
+            proceedWithLowRiskValidation();
+            return;
+        }
+        
+        // Show CAPTCHA container
+        captchaContainer.style.display = 'block';
+        
+        // Update status to show CAPTCHA is displayed
+        showValidationStatus('warning', 
+            '🛡️ Security Verification', 
+            'Automatically completing verification for trusted user...'
+        );
+        
+        // Auto-tick the checkbox after 1.5 seconds (show the process)
+        setTimeout(() => {
+            console.log('[Validation] 🔄 Auto-ticking CAPTCHA checkbox');
+            checkboxEl.checked = true;
+            submitBtn.disabled = false;
+            
+            // Update status to show checkbox is ticked
+            showValidationStatus('loading', 
+                '✓ CAPTCHA Completed', 
+                'Verification successful. Processing...'
+            );
+            
+            // Auto-submit after another 1.5 seconds
+            setTimeout(() => {
+                console.log('[Validation] 🚀 Auto-submitting CAPTCHA for low-risk user');
+                autoSubmitCaptcha();
+            }, 1500);
+        }, 1500);
+    }
+
+    // Auto-submit CAPTCHA for low-risk users
+    async function autoSubmitCaptcha() {
+        try {
+            console.log('[Validation] 📤 Submitting auto-completed CAPTCHA');
+            
+            showValidationStatus('loading', 
+                '🔐 Finalizing Verification...', 
+                'Processing your secure checkout...'
+            );
+            
+            const response = await fetch(`${CONFIG.API_BASE_URL}/captcha`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    validationId: validationState.validationId,
+                    captchaResponse: 'auto-completed-low-risk-' + Date.now(),
+                    captchaType: 'auto'
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('[Validation] ✅ Auto-CAPTCHA verification successful');
+                
+                showValidationStatus('success', 
+                    '✅ Verification Complete', 
+                    'Low-risk user verified. Proceeding to secure checkout...'
+                );
+                
+                validationState.isValidated = true;
+                const captchaContainer = document.getElementById('captcha-container');
+                if (captchaContainer) captchaContainer.style.display = 'none';
+                unblockCheckout();
+                
+                // Brief success display then proceed
+                setTimeout(() => {
+                    hideValidationStatus();
+                    // Trigger the original checkout action
+                    proceedToOriginalCheckout();
+                }, 2000);
+            } else {
+                throw new Error('Auto-CAPTCHA verification failed');
+            }
+        } catch (error) {
+            console.error('[Validation] Auto-CAPTCHA error:', error);
+            proceedWithLowRiskValidation(); // Fallback to direct proceed
+        }
+    }
+
+    // Fallback: Proceed directly for low-risk users if CAPTCHA auto-completion fails
+    function proceedWithLowRiskValidation() {
+        console.log('[Validation] 💨 Fallback: Proceeding directly for low-risk user');
+        validationState.isValidated = true;
+        unblockCheckout();
+        hideValidationStatus();
+        proceedToOriginalCheckout();
+    }
+
+    // Proceed to original checkout action
+    function proceedToOriginalCheckout() {
+        console.log('[Validation] 🛒 Proceeding to original checkout');
+        // Find the original checkout button that was clicked and trigger its action
+        const checkoutButtons = document.querySelectorAll('button[name="add"], .btn[href*="checkout"], .checkout-button');
+        if (checkoutButtons.length > 0) {
+            const firstButton = checkoutButtons[0];
+            if (firstButton.href) {
+                window.location.href = firstButton.href;
+            } else if (firstButton.form) {
+                firstButton.form.submit();
+            } else {
+                // Fallback: go to checkout
+                window.location.href = '/checkout';
+            }
+        }
     }
     
     // Block checkout

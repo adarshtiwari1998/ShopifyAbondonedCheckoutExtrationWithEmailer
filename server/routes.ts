@@ -262,13 +262,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
     
-    // Fallback for demo/mock CAPTCHA (for testing when reCAPTCHA keys aren't set)
-    if (type === 'mock') {
-      const hasValidFormat = response.startsWith('mock-captcha-response-');
-      const hasValidLength = response.length >= 20 && response.length <= 100;
-      return hasValidFormat && hasValidLength;
+    // Secure handling of mock/auto CAPTCHA types
+    if (type === 'mock' || type === 'auto') {
+      // Security: Only allow mock/auto CAPTCHA in development or for verified low-risk users
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      const allowMockCaptcha = process.env.ALLOW_MOCK_CAPTCHA === 'true';
+      
+      if (!isDevelopment && !allowMockCaptcha) {
+        console.error(`Security: Rejecting ${type} CAPTCHA type in production environment`);
+        return false;
+      }
+      
+      // Additional security: For auto type, verify this is actually a low-risk user
+      if (type === 'auto') {
+        const isLowRisk = validation.riskScore === 0;
+        if (!isLowRisk) {
+          console.error(`Security: Rejecting auto CAPTCHA for non-low-risk user (risk score: ${validation.riskScore})`);
+          return false;
+        }
+        console.log(`[Security] Allowing auto CAPTCHA for verified low-risk user (risk score: ${validation.riskScore})`);
+      }
+      
+      if (type === 'mock') {
+        console.log(`[Security] Allowing mock CAPTCHA in ${isDevelopment ? 'development' : 'configured'} environment`);
+        const hasValidFormat = response.startsWith('mock-captcha-response-');
+        const hasValidLength = response.length >= 20 && response.length <= 100;
+        return hasValidFormat && hasValidLength;
+      }
+      
+      if (type === 'auto') {
+        const hasValidFormat = response.startsWith('auto-completed-low-risk-');
+        const hasValidLength = response.length >= 20 && response.length <= 100;
+        return hasValidFormat && hasValidLength;
+      }
     }
     
+    console.error(`Unsupported CAPTCHA type: ${type}`);
     return false;
   }
 
