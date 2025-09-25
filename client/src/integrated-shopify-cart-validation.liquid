@@ -619,7 +619,7 @@
 document.addEventListener('DOMContentLoaded', function() {
   // Configuration (will be loaded dynamically from server)
   let CONFIG = {
-    API_BASE_URL: 'https://63a4699b-0150-4ab2-8d49-9f3f41731065-00-3hg8w7sa7r81k.sisko.replit.dev/api/validation',
+    API_BASE_URL: window.location.origin + '/api/validation',
     MINIMUM_CART_VALUE: {{ minimum_order_value }}, // Use your Shopify variable
     DEBUG_MODE: false, // Set to false for production
     SITE_KEY: null // Will be loaded securely from server

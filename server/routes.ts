@@ -368,11 +368,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let isValidRequest = false;
       
+      // Check for development environment (Replit domains)
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      
       // Validate Origin header with strict host matching
       if (origin) {
         try {
           const originUrl = new URL(origin);
-          isValidRequest = allowedHosts.includes(originUrl.hostname.toLowerCase());
+          const hostname = originUrl.hostname.toLowerCase();
+          
+          // Production domain check
+          isValidRequest = allowedHosts.includes(hostname);
+          
+          // Development domain check (Replit domains)
+          if (!isValidRequest && isDevelopment) {
+            isValidRequest = hostname.endsWith('.replit.dev') || 
+                           hostname.endsWith('.replit.co') ||
+                           hostname === 'localhost' ||
+                           hostname.startsWith('127.0.0.1');
+          }
         } catch (e) {
           console.warn('Invalid Origin URL:', origin);
         }
@@ -382,7 +396,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!isValidRequest && referer) {
         try {
           const refererUrl = new URL(referer);
-          isValidRequest = allowedHosts.includes(refererUrl.hostname.toLowerCase());
+          const hostname = refererUrl.hostname.toLowerCase();
+          
+          // Production domain check
+          isValidRequest = allowedHosts.includes(hostname);
+          
+          // Development domain check (Replit domains)
+          if (!isValidRequest && isDevelopment) {
+            isValidRequest = hostname.endsWith('.replit.dev') || 
+                           hostname.endsWith('.replit.co') ||
+                           hostname === 'localhost' ||
+                           hostname.startsWith('127.0.0.1');
+          }
         } catch (e) {
           console.warn('Invalid Referer URL:', referer);
         }
