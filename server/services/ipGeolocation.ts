@@ -38,11 +38,14 @@ export class IpGeolocationService {
 
   async getLocationData(ipAddress: string): Promise<IpGeolocationData> {
     try {
-      // For demo purposes, return mock data based on IP patterns
-      if (this.apiKey === 'demo-key') {
+      // Use real AbstractAPI if key is available
+      if (this.apiKey === 'demo-key' || !this.apiKey) {
+        console.log('[IP Geolocation] Using mock data - no AbstractAPI key configured');
         return this.getMockLocationData(ipAddress);
       }
 
+      console.log(`[IP Geolocation] Fetching real location data for IP: ${ipAddress}`);
+      
       const response = await fetch(`${this.apiUrl}?api_key=${this.apiKey}&ip_address=${ipAddress}`, {
         method: 'GET',
         headers: {
@@ -51,11 +54,18 @@ export class IpGeolocationService {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[IP Geolocation] AbstractAPI error: ${response.status} - ${errorText}`);
         throw new Error(`IP Geolocation API error: ${response.status}`);
       }
 
       const data = await response.json();
-      return this.transformApiResponse(data);
+      console.log(`[IP Geolocation] AbstractAPI response:`, JSON.stringify(data, null, 2));
+      
+      const transformedData = this.transformApiResponse(data);
+      console.log(`[IP Geolocation] Real location result:`, JSON.stringify(transformedData, null, 2));
+      
+      return transformedData;
     } catch (error) {
       console.error('Error fetching IP geolocation:', error);
       // Return basic data for fallback

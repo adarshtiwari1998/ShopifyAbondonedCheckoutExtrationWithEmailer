@@ -410,6 +410,8 @@
 .flsvalidation-btn-icon {
   font-size: 16px;
 }
+
+  
 </style>
 
 <!-- Integrated JavaScript for Cart Validation + CAPTCHA -->
@@ -717,34 +719,6 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     checkRecaptcha();
-  }
-
-  // Invisible reCAPTCHA function for Score-based keys
-  function executeInvisibleRecaptcha() {
-    console.log('[reCAPTCHA] Executing invisible verification for Score-based key...');
-    
-    // Hide checkbox container and show invisible mode UI
-    document.getElementById('flsvalidation-recaptcha-container').style.display = 'none';
-    document.getElementById('flsvalidation-enterprise-fallback').style.display = 'block';
-    
-    // For Score-based keys, execute invisible challenge
-    grecaptcha.enterprise.ready(function() {
-      grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, {
-        action: 'checkout_validation'
-      }).then(function(token) {
-        console.log('[reCAPTCHA] Invisible verification completed');
-        window.flsvalidationRecaptchaResponse = token;
-        elements.captchaSubmit.disabled = false;
-        
-        // Auto-submit for invisible mode (better UX)
-        setTimeout(() => {
-          handleCaptchaSubmit();
-        }, 1000);
-      }).catch(function(error) {
-        console.error('[reCAPTCHA] Invisible execution failed:', error);
-        onRecaptchaError(error);
-      });
-    });
   }
   
   // Callback when user completes reCAPTCHA
