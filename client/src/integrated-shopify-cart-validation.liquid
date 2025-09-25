@@ -80,13 +80,25 @@
             </div>
           </div>
           
-          <!-- Hidden reCAPTCHA Container for Auto-Execution -->
-          <div id="flsvalidation-recaptcha-container" style="display: none;"></div>
+          <!-- reCAPTCHA Widget Container -->
+          <div id="flsvalidation-captcha-widget-section" style="display: none;">
+            <div class="flsvalidation-captcha-header">
+              <strong>🤖 Security Verification</strong>
+              <p>Please wait while we verify your security automatically:</p>
+            </div>
+            <div class="flsvalidation-recaptcha-widget">
+              <div id="flsvalidation-recaptcha-container"></div>
+            </div>
+            <div class="flsvalidation-captcha-actions">
+              <button id="flsvalidation-captcha-submit" class="flsvalidation-btn flsvalidation-btn-primary" disabled>Continue to Checkout</button>
+              <button id="flsvalidation-captcha-retry" class="flsvalidation-btn flsvalidation-btn-secondary">Try Again</button>
+            </div>
+          </div>
           
           <!-- Manual Verification Fallback (Only shown if needed) -->
           <div id="flsvalidation-manual-verification" class="flsvalidation-manual-verification" style="display: none;">
             <div class="flsvalidation-manual-header">
-              <strong>🤖 Additional Verification Required</strong>
+              <strong>🛡️ Additional Verification Required</strong>
               <p>For your security, please complete this quick verification:</p>
             </div>
             <div id="flsvalidation-manual-captcha" class="flsvalidation-manual-captcha"></div>
@@ -633,6 +645,9 @@ document.addEventListener('DOMContentLoaded', function() {
     validationMessage: document.getElementById('flsvalidation-validation-message'),
     validationDetails: document.getElementById('flsvalidation-validation-details'),
     captchaContainer: document.getElementById('flsvalidation-captcha-container'),
+    captchaWidgetSection: document.getElementById('flsvalidation-captcha-widget-section'),
+    captchaSubmit: document.getElementById('flsvalidation-captcha-submit'),
+    captchaRetry: document.getElementById('flsvalidation-captcha-retry'),
     progressFill: document.getElementById('flsvalidation-progress-fill'),
     step1: document.getElementById('step-1'),
     step2: document.getElementById('step-2'),
@@ -677,16 +692,16 @@ document.addEventListener('DOMContentLoaded', function() {
         RECAPTCHA_SITE_KEY = config.siteKey;
         CONFIG.SITE_KEY = config.siteKey;
         
-        // Load reCAPTCHA Enterprise script for auto-execution (invisible mode)
+        // Load reCAPTCHA Enterprise script for checkbox widget
         if (RECAPTCHA_SITE_KEY) {
           const script = document.createElement('script');
-          // Use invisible mode for auto-execution with fallback to manual if needed
-          script.src = `https://www.google.com/recaptcha/enterprise.js?render=${RECAPTCHA_SITE_KEY}`;
+          // Use explicit render for checkbox widget with auto-check capability
+          script.src = 'https://www.google.com/recaptcha/enterprise.js?render=explicit';
           script.async = true;
           script.defer = true;
           script.onload = () => {
             if (CONFIG.DEBUG_MODE) {
-              console.log('[Cart Validation] reCAPTCHA Enterprise script loaded for auto-execution');
+              console.log('[Cart Validation] reCAPTCHA Enterprise script loaded for checkbox widget');
             }
           };
           document.head.appendChild(script);
@@ -711,6 +726,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // New UI event listeners
+    // reCAPTCHA widget events
+    if (elements.captchaSubmit) {
+      elements.captchaSubmit.addEventListener('click', () => handleCaptchaSubmit());
+    }
+    
+    if (elements.captchaRetry) {
+      elements.captchaRetry.addEventListener('click', () => {
+        startSecurityValidation();
+      });
+    }
+    
     if (elements.manualSubmit) {
       elements.manualSubmit.addEventListener('click', () => handleManualCaptchaSubmit());
     }
@@ -718,7 +744,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (elements.manualRetry) {
       elements.manualRetry.addEventListener('click', () => {
         elements.manualVerification.style.display = 'none';
-        startAutoVerification();
+        startSecurityValidation();
       });
     }
     
@@ -850,12 +876,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       
-      // Step 2: Auto reCAPTCHA execution
-      showValidationStatus('loading', '🔐 Security verification', 'Running advanced security checks.');
+      // Step 2: Show reCAPTCHA widget
+      showValidationStatus('loading', '🔐 Security verification', 'Preparing security verification.');
       updateProgress(2, 70);
       
-      // Start automatic reCAPTCHA verification
-      await startAutoVerification(result);
+      // Show reCAPTCHA widget and handle auto-checking
+      showCaptchaWidget(result);
 
     } catch (error) {
       console.error('Validation error:', error);
@@ -877,24 +903,79 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
-  async function startAutoVerification(validationResult) {
-    try {
-      // Wait for reCAPTCHA to be ready
-      await waitForRecaptcha();
-      
-      // Execute invisible reCAPTCHA
-      const token = await executeInvisibleRecaptcha();
-      
-      if (token) {
-        // Submit token for verification
-        await submitCaptchaToken(token, validationResult);
+  function showCaptchaWidget(validationResult) {
+    // Show the reCAPTCHA widget section
+    elements.captchaWidgetSection.style.display = 'block';
+    
+    // Show different messaging based on risk level
+    if (validationResult.requiresCaptcha) {
+      showValidationStatus('warning', '🛡️ Security Verification Required', 
+        `Location: ${validationResult.location?.city || 'Unknown'}, ${validationResult.location?.country || 'Unknown'} - Additional verification needed`);
+    } else {
+      showValidationStatus('loading', '🔐 Completing Security Verification', 
+        `Verified from ${validationResult.location?.city || 'Unknown'}, ${validationResult.location?.country || 'Unknown'} - Finalizing your secure checkout`);
+    }
+    
+    // Render reCAPTCHA widget
+    renderRecaptchaWidget(validationResult.requiresCaptcha);
+  }
+  
+  function renderRecaptchaWidget(requiresManualCheck = false) {
+    // Wait for grecaptcha enterprise to be ready
+    const checkRecaptcha = () => {
+      if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
+        try {
+          // Render the checkbox widget
+          window.flsvalidationRecaptchaWidgetId = grecaptcha.enterprise.render('flsvalidation-recaptcha-container', {
+            'sitekey': RECAPTCHA_SITE_KEY,
+            'callback': function(response) {
+              onRecaptchaCallback(response, requiresManualCheck);
+            },
+            'expired-callback': onRecaptchaExpired,
+            'error-callback': function(error) {
+              console.error('[reCAPTCHA Enterprise] Error:', error);
+              showManualVerification({});
+            },
+            'theme': 'light',
+            'size': 'normal'
+          });
+          
+          if (CONFIG.DEBUG_MODE) {
+            console.log('[reCAPTCHA Enterprise] Checkbox widget rendered successfully');
+          }
+          
+          // If low risk, auto-tick the checkbox after a brief moment
+          if (!requiresManualCheck) {
+            setTimeout(() => {
+              autoTickRecaptcha();
+            }, 1500); // Wait 1.5 seconds then auto-tick
+          }
+        } catch (error) {
+          console.error('[reCAPTCHA Enterprise] Error rendering widget:', error);
+          showManualVerification({});
+        }
       } else {
-        throw new Error('Failed to get reCAPTCHA token');
+        // Retry after 500ms if grecaptcha enterprise not loaded yet
+        setTimeout(checkRecaptcha, 500);
+      }
+    };
+    
+    checkRecaptcha();
+  }
+  
+  function autoTickRecaptcha() {
+    try {
+      if (window.flsvalidationRecaptchaWidgetId !== null && grecaptcha && grecaptcha.enterprise) {
+        // Programmatically execute the reCAPTCHA (this "ticks" the box)
+        grecaptcha.enterprise.execute(window.flsvalidationRecaptchaWidgetId);
+        
+        if (CONFIG.DEBUG_MODE) {
+          console.log('[reCAPTCHA] Auto-ticked checkbox');
+        }
       }
     } catch (error) {
-      console.error('Auto verification failed:', error);
-      // Fall back to manual verification if auto fails
-      showManualVerification(validationResult);
+      console.error('[reCAPTCHA] Auto-tick failed:', error);
+      // If auto-tick fails, user can still manually click
     }
   }
   
@@ -1080,6 +1161,59 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
   }
   
+  // Main reCAPTCHA callback
+  function onRecaptchaCallback(response, wasManualCheck) {
+    if (CONFIG.DEBUG_MODE) {
+      console.log('[reCAPTCHA] User completed verification, auto-check:', !wasManualCheck);
+    }
+    
+    // Enable the submit button
+    elements.captchaSubmit.disabled = false;
+    window.flsvalidationRecaptchaResponse = response;
+    
+    // If this was an auto-check (low risk), automatically proceed
+    if (!wasManualCheck) {
+      elements.captchaSubmit.textContent = 'Proceeding...';
+      setTimeout(() => {
+        handleCaptchaSubmit();
+      }, 800); // Small delay for smooth UX
+    } else {
+      // Manual check - user needs to click button
+      elements.captchaSubmit.textContent = 'Continue to Checkout';
+    }
+  }
+  
+  function onRecaptchaExpired() {
+    if (CONFIG.DEBUG_MODE) {
+      console.log('[reCAPTCHA] Verification expired');
+    }
+    
+    // Disable submit button
+    elements.captchaSubmit.disabled = true;
+    elements.captchaSubmit.textContent = 'Continue to Checkout';
+    window.flsvalidationRecaptchaResponse = null;
+  }
+  
+  async function handleCaptchaSubmit() {
+    if (!window.flsvalidationRecaptchaResponse) {
+      showValidationStatus('warning', '⚠️ Please complete verification', 
+        'Please wait for the security check to complete.');
+      return;
+    }
+    
+    elements.captchaSubmit.disabled = true;
+    elements.captchaSubmit.textContent = 'Verifying...';
+    
+    try {
+      await submitCaptchaToken(window.flsvalidationRecaptchaResponse, {});
+    } catch (error) {
+      console.error('Captcha verification failed:', error);
+      elements.captchaSubmit.disabled = false;
+      elements.captchaSubmit.textContent = 'Continue to Checkout';
+    }
+  }
+  
+  // Manual reCAPTCHA callbacks
   window.onManualRecaptchaCallback = function(response) {
     elements.manualSubmit.disabled = false;
     window.flsvalidationManualResponse = response;
