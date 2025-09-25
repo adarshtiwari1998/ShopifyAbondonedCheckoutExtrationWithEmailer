@@ -58,8 +58,12 @@
               <p>Please complete the reCAPTCHA verification to proceed to checkout:</p>
             </div>
             <div id="flsvalidation-captcha-challenge" class="flsvalidation-captcha-challenge">
-              <!-- reCAPTCHA Enterprise - No visible challenge, runs automatically -->
-              <div class="flsvalidation-enterprise-info">
+              <!-- Google reCAPTCHA v2 Checkbox Widget -->
+              <div class="flsvalidation-recaptcha-widget">
+                <div id="flsvalidation-recaptcha-container"></div>
+              </div>
+              <!-- Fallback for reCAPTCHA Enterprise invisible mode -->
+              <div class="flsvalidation-enterprise-info" id="flsvalidation-enterprise-fallback" style="display: none;">
                 <p>🛡️ Running advanced security verification...</p>
                 <button id="flsvalidation-enterprise-verify" class="flsvalidation-btn flsvalidation-btn-primary">Verify & Continue</button>
               </div>
@@ -266,6 +270,24 @@
   margin: 15px 0;
 }
 
+/* reCAPTCHA Widget Styling */
+.flsvalidation-recaptcha-widget {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px 0;
+  padding: 10px;
+}
+
+#flsvalidation-recaptcha-container {
+  margin: 0 auto;
+}
+
+/* Center the reCAPTCHA widget */
+.flsvalidation-recaptcha-widget iframe {
+  margin: 0 auto !important;
+}
+
 .flsvalidation-captcha-header {
   margin-bottom: 15px;
   text-align: center;
@@ -466,16 +488,16 @@ document.addEventListener('DOMContentLoaded', function() {
         RECAPTCHA_SITE_KEY = config.siteKey;
         CONFIG.SITE_KEY = config.siteKey;
         
-        // Load reCAPTCHA Enterprise script with the correct site key
+        // Load reCAPTCHA v2 script for checkbox widget
         if (RECAPTCHA_SITE_KEY) {
           const script = document.createElement('script');
-          script.src = `https://www.google.com/recaptcha/enterprise.js?render=${RECAPTCHA_SITE_KEY}`;
+          script.src = 'https://www.google.com/recaptcha/api.js?render=explicit';
           script.async = true;
           script.defer = true;
           document.head.appendChild(script);
           
           if (CONFIG.DEBUG_MODE) {
-            console.log('[Cart Validation] reCAPTCHA Enterprise script loaded');
+            console.log('[Cart Validation] reCAPTCHA v2 checkbox script loaded');
           }
         }
       } else {
@@ -637,8 +659,76 @@ document.addEventListener('DOMContentLoaded', function() {
     elements.captchaContainer.style.display = 'block';
     elements.captchaSubmit.disabled = true;
     
-    // reCAPTCHA Enterprise doesn't need widget rendering - just show the button
+    // Render reCAPTCHA v2 checkbox widget
+    renderRecaptchaWidget();
   }
+
+  // Global variable to store widget ID
+  window.flsvalidationRecaptchaWidgetId = null;
+  
+  function renderRecaptchaWidget() {
+    // Wait for grecaptcha to be ready
+    const checkRecaptcha = () => {
+      if (typeof grecaptcha !== 'undefined') {
+        try {
+          // Render the reCAPTCHA checkbox widget
+          window.flsvalidationRecaptchaWidgetId = grecaptcha.render('flsvalidation-recaptcha-container', {
+            'sitekey': RECAPTCHA_SITE_KEY,
+            'callback': onRecaptchaCallback,
+            'expired-callback': onRecaptchaExpired,
+            'error-callback': onRecaptchaError,
+            'theme': 'light',
+            'size': 'normal'
+          });
+          
+          if (CONFIG.DEBUG_MODE) {
+            console.log('[reCAPTCHA] Checkbox widget rendered successfully');
+          }
+        } catch (error) {
+          console.error('[reCAPTCHA] Error rendering widget:', error);
+          // Fallback to enterprise invisible mode
+          document.getElementById('flsvalidation-enterprise-fallback').style.display = 'block';
+        }
+      } else {
+        // Retry after 500ms if grecaptcha not loaded yet
+        setTimeout(checkRecaptcha, 500);
+      }
+    };
+    
+    checkRecaptcha();
+  }
+  
+  // Callback when user completes reCAPTCHA
+  window.onRecaptchaCallback = function(response) {
+    if (CONFIG.DEBUG_MODE) {
+      console.log('[reCAPTCHA] User completed verification');
+    }
+    
+    // Enable the submit button
+    elements.captchaSubmit.disabled = false;
+    window.flsvalidationRecaptchaResponse = response;
+  };
+  
+  // Callback when reCAPTCHA expires
+  window.onRecaptchaExpired = function() {
+    if (CONFIG.DEBUG_MODE) {
+      console.log('[reCAPTCHA] Verification expired');
+    }
+    
+    // Disable submit button
+    elements.captchaSubmit.disabled = true;
+    window.flsvalidationRecaptchaResponse = null;
+  };
+  
+  // Callback when reCAPTCHA encounters an error
+  window.onRecaptchaError = function() {
+    if (CONFIG.DEBUG_MODE) {
+      console.log('[reCAPTCHA] Error occurred');
+    }
+    
+    showValidationStatus('error', '❌ reCAPTCHA Error', 
+      'There was an error loading the verification. Please try again.');
+  };
 
   function showValidationStatus(type, message, details = '') {
     elements.validationStatus.className = `flsvalidation-validation-status flsvalidation-${type}`;
