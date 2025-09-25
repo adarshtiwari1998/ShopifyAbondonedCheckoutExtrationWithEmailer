@@ -69,9 +69,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { sessionId, cartValue, cartItems, userAgent } = validationResult.data;
       const ipAddress = getClientIp(req);
+      console.log(`[IP Detection] Client IP detected: ${ipAddress}`);
 
       // Get IP validation
       const ipValidation = await ipGeolocationService.validateUserLocation(ipAddress, userAgent);
+      console.log(`[IP Geolocation] Location result:`, {
+        ip: ipAddress,
+        country: ipValidation.locationData.country,
+        region: ipValidation.locationData.region,
+        city: ipValidation.locationData.city,
+        isp: ipValidation.locationData.isp
+      });
       
       // Create user validation record
       const validation = await storage.createUserValidation({

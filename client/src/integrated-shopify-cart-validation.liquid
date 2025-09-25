@@ -488,16 +488,16 @@ document.addEventListener('DOMContentLoaded', function() {
         RECAPTCHA_SITE_KEY = config.siteKey;
         CONFIG.SITE_KEY = config.siteKey;
         
-        // Load reCAPTCHA v2 script for checkbox widget
+        // Load reCAPTCHA Enterprise script with checkbox widget support
         if (RECAPTCHA_SITE_KEY) {
           const script = document.createElement('script');
-          script.src = 'https://www.google.com/recaptcha/api.js?render=explicit';
+          script.src = 'https://www.google.com/recaptcha/enterprise.js?render=explicit';
           script.async = true;
           script.defer = true;
           document.head.appendChild(script);
           
           if (CONFIG.DEBUG_MODE) {
-            console.log('[Cart Validation] reCAPTCHA v2 checkbox script loaded');
+            console.log('[Cart Validation] reCAPTCHA Enterprise checkbox script loaded');
           }
         }
       } else {
@@ -667,12 +667,12 @@ document.addEventListener('DOMContentLoaded', function() {
   window.flsvalidationRecaptchaWidgetId = null;
   
   function renderRecaptchaWidget() {
-    // Wait for grecaptcha to be ready
+    // Wait for grecaptcha enterprise to be ready
     const checkRecaptcha = () => {
-      if (typeof grecaptcha !== 'undefined') {
+      if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise) {
         try {
-          // Render the reCAPTCHA checkbox widget
-          window.flsvalidationRecaptchaWidgetId = grecaptcha.render('flsvalidation-recaptcha-container', {
+          // Render the reCAPTCHA Enterprise checkbox widget
+          window.flsvalidationRecaptchaWidgetId = grecaptcha.enterprise.render('flsvalidation-recaptcha-container', {
             'sitekey': RECAPTCHA_SITE_KEY,
             'callback': onRecaptchaCallback,
             'expired-callback': onRecaptchaExpired,
@@ -682,15 +682,15 @@ document.addEventListener('DOMContentLoaded', function() {
           });
           
           if (CONFIG.DEBUG_MODE) {
-            console.log('[reCAPTCHA] Checkbox widget rendered successfully');
+            console.log('[reCAPTCHA Enterprise] Checkbox widget rendered successfully');
           }
         } catch (error) {
-          console.error('[reCAPTCHA] Error rendering widget:', error);
-          // Fallback to enterprise invisible mode
+          console.error('[reCAPTCHA Enterprise] Error rendering widget:', error);
+          // Fallback to invisible mode
           document.getElementById('flsvalidation-enterprise-fallback').style.display = 'block';
         }
       } else {
-        // Retry after 500ms if grecaptcha not loaded yet
+        // Retry after 500ms if grecaptcha enterprise not loaded yet
         setTimeout(checkRecaptcha, 500);
       }
     };
@@ -824,9 +824,9 @@ document.addEventListener('DOMContentLoaded', function() {
         showValidationStatus('error', '❌ Verification Failed', 
           'reCAPTCHA verification failed. Please try again.');
         
-        // Reset reCAPTCHA widget
-        if (typeof grecaptcha !== 'undefined' && window.flsvalidationRecaptchaWidgetId !== null) {
-          grecaptcha.reset(window.flsvalidationRecaptchaWidgetId);
+        // Reset reCAPTCHA Enterprise widget
+        if (typeof grecaptcha !== 'undefined' && grecaptcha.enterprise && window.flsvalidationRecaptchaWidgetId !== null) {
+          grecaptcha.enterprise.reset(window.flsvalidationRecaptchaWidgetId);
         }
         window.flsvalidationRecaptchaResponse = null;
         elements.captchaSubmit.disabled = true;
