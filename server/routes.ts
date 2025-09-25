@@ -127,6 +127,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         location: {
           country: ipValidation.locationData.country,
           city: ipValidation.locationData.city,
+          region: ipValidation.locationData.region,
+          coordinates: ipValidation.locationData.latitude && ipValidation.locationData.longitude ? {
+            latitude: parseFloat(ipValidation.locationData.latitude),
+            longitude: parseFloat(ipValidation.locationData.longitude)
+          } : null,
+          timezone: ipValidation.locationData.timezone_name,
+          // Hide technical ISP routing data from frontend (stored in backend only)
         }
       });
     } catch (error) {

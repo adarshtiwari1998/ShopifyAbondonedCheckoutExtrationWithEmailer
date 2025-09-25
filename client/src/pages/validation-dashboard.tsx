@@ -188,12 +188,25 @@ export default function ValidationDashboard() {
                               </div>
                               <div className="text-sm text-muted-foreground">
                                 {validation.locationData?.country && validation.locationData?.city
-                                  ? `${validation.locationData.city}, ${validation.locationData.country}`
+                                  ? `${validation.locationData.city}, ${validation.locationData.region ? validation.locationData.region + ', ' : ''}${validation.locationData.country}`
                                   : 'Location unknown'
                                 }
-                                {validation.locationData?.isVpn && (
-                                  <Badge variant="outline" className="ml-2">VPN</Badge>
+                                {validation.locationData?.latitude && validation.locationData?.longitude && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    📍 {parseFloat(validation.locationData.latitude).toFixed(4)}, {parseFloat(validation.locationData.longitude).toFixed(4)}
+                                  </div>
                                 )}
+                                <div className="flex gap-2 mt-1">
+                                  {validation.locationData?.isVpn && (
+                                    <Badge variant="outline" className="text-xs">VPN</Badge>
+                                  )}
+                                  {validation.locationData?.isProxy && (
+                                    <Badge variant="outline" className="text-xs">Proxy</Badge>
+                                  )}
+                                  {validation.locationData?.isTor && (
+                                    <Badge variant="destructive" className="text-xs">Tor</Badge>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
