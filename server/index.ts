@@ -1,9 +1,29 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { CredentialsManager } from "./services/credentialsManager.js";
 
 const app = express();
+
+// CORS configuration to allow requests from your Shopify store
+app.use(cors({
+  origin: [
+    'https://foxxlifesciences.com',
+    'https://www.foxxlifesciences.com',
+    'https://shopfls.myshopify.com',
+    // Development origins
+    'http://localhost:3000',
+    'http://localhost:5000',
+    // Replit domains
+    /\.replit\.dev$/,
+    /\.replit\.co$/
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

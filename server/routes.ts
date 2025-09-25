@@ -157,52 +157,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Real Google reCAPTCHA verification function
+  // Google reCAPTCHA Enterprise verification function
   async function verifyCaptcha(response: string, type: string = 'recaptcha', validation: any): Promise<boolean> {
-    // Handle Google reCAPTCHA verification
+    // Handle Google reCAPTCHA Enterprise verification
     if (type === 'recaptcha' || type === 'google') {
-      const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+      const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+      const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
       
-      if (!secretKey) {
-        console.error('RECAPTCHA_SECRET_KEY not configured');
+      if (!projectId || !apiKey) {
+        console.error('Google Cloud credentials not configured (PROJECT_ID or API_KEY missing)');
         return false;
       }
 
       if (!response) {
-        console.error('reCAPTCHA response token missing');
+        console.error('reCAPTCHA Enterprise response token missing');
         return false;
       }
 
       try {
-        const verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
+        const verifyUrl = `https://recaptchaenterprise.googleapis.com/v1/projects/${projectId}/assessments?key=${apiKey}`;
+        
+        const requestBody = {
+          event: {
+            token: response,
+            siteKey: '6Lc0n9QrATFkmu2', // Your Enterprise site key
+            userAgent: validation.userAgent || '',
+            userIpAddress: validation.ipAddress || '',
+            expectedAction: 'checkout_validation'
+          }
+        };
+
         const verifyResponse = await fetch(verifyUrl, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/json',
           },
-          body: new URLSearchParams({
-            secret: secretKey,
-            response: response,
-            remoteip: validation.ipAddress || '' // optional
-          }).toString()
+          body: JSON.stringify(requestBody)
         });
 
-        const result = await verifyResponse.json();
-        
-        if (result.success) {
-          // For reCAPTCHA v3, check score threshold (0.5 is a common threshold)
-          if (result.score !== undefined) {
-            const threshold = 0.5;
-            return result.score >= threshold;
-          }
-          // For reCAPTCHA v2, just check success
-          return true;
-        } else {
-          console.error('reCAPTCHA verification failed:', result['error-codes']);
+        if (!verifyResponse.ok) {
+          const errorText = await verifyResponse.text();
+          console.error('reCAPTCHA Enterprise API error:', verifyResponse.status, errorText);
           return false;
         }
+
+        const result = await verifyResponse.json();
+        console.log('reCAPTCHA Enterprise result:', JSON.stringify(result, null, 2));
+        
+        const tokenProperties = result.tokenProperties;
+        const riskAnalysis = result.riskAnalysis;
+        
+        if (!tokenProperties || !tokenProperties.valid) {
+          console.error('reCAPTCHA Enterprise token invalid:', tokenProperties?.invalidReason || 'Unknown reason');
+          return false;
+        }
+
+        // Check if action matches expected action
+        if (tokenProperties.action !== 'checkout_validation') {
+          console.warn('reCAPTCHA Enterprise action mismatch. Expected: checkout_validation, Got:', tokenProperties.action);
+        }
+
+        // For reCAPTCHA Enterprise, check the risk score (0.0 = bot, 1.0 = human)
+        const score = riskAnalysis?.score || 0;
+        const threshold = 0.5; // Adjust as needed (0.5 is common)
+        
+        console.log(`reCAPTCHA Enterprise score: ${score}, threshold: ${threshold}`);
+        
+        return score >= threshold;
+        
       } catch (error) {
-        console.error('reCAPTCHA verification error:', error);
+        console.error('reCAPTCHA Enterprise verification error:', error);
         return false;
       }
     }

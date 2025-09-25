@@ -1,8 +1,8 @@
 <!-- INTEGRATED SHOPIFY CART VALIDATION WITH REAL GOOGLE reCAPTCHA -->
 <!-- This combines your existing $100 validation with real Google reCAPTCHA validation -->
 
-<!-- Load Google reCAPTCHA API -->
-<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<!-- Load Google reCAPTCHA Enterprise API -->
+<script src="https://www.google.com/recaptcha/enterprise.js?render=6Lc0n9QrATFkmu2" async defer></script>
 
 <!-- Enhanced Validation Modal with Real reCAPTCHA Integration -->
 <div id="flsvalidation-modal" class="flsvalidation-modal-overlay" style="display: none;">
@@ -58,13 +58,10 @@
               <p>Please complete the reCAPTCHA verification to proceed to checkout:</p>
             </div>
             <div id="flsvalidation-captcha-challenge" class="flsvalidation-captcha-challenge">
-              <!-- Real Google reCAPTCHA will be inserted here -->
-              <div class="g-recaptcha" 
-                   id="flsvalidation-recaptcha-element"
-                   data-sitekey="YOUR_RECAPTCHA_SITE_KEY_HERE"
-                   data-callback="onRecaptchaSuccess"
-                   data-error-callback="onRecaptchaError"
-                   data-expired-callback="onRecaptchaExpired">
+              <!-- reCAPTCHA Enterprise - No visible challenge, runs automatically -->
+              <div class="flsvalidation-enterprise-info">
+                <p>🛡️ Running advanced security verification...</p>
+                <button id="flsvalidation-enterprise-verify" class="flsvalidation-btn flsvalidation-btn-primary">Verify & Continue</button>
               </div>
             </div>
             <div class="flsvalidation-captcha-actions">
@@ -398,7 +395,7 @@
 document.addEventListener('DOMContentLoaded', function() {
   // Configuration
   const CONFIG = {
-    API_BASE_URL: window.location.origin + '/api/validation',
+    API_BASE_URL: 'https://e54fff5c-6607-420f-93c6-d3b0d5c4a802-00-3dqfuwn1ssai0.sisko.replit.dev/api/validation',
     MINIMUM_CART_VALUE: {{ minimum_order_value }}, // Use your Shopify variable
     DEBUG_MODE: true
   };
@@ -430,7 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
     validationMessage: document.getElementById('flsvalidation-validation-message'),
     validationDetails: document.getElementById('flsvalidation-validation-details'),
     captchaContainer: document.getElementById('flsvalidation-captcha-container'),
-    recaptchaElement: document.getElementById('flsvalidation-recaptcha-element'),
+    enterpriseVerify: document.getElementById('flsvalidation-enterprise-verify'),
     captchaSubmit: document.getElementById('flsvalidation-captcha-submit'),
     captchaCancel: document.getElementById('flsvalidation-captcha-cancel'),
     modalTitleText: document.getElementById('flsvalidation-modal-title-text'),
@@ -439,38 +436,9 @@ document.addEventListener('DOMContentLoaded', function() {
     amountNeededSection: document.getElementById('flsvalidation-amount-needed-section')
   };
 
-  // Global variables for reCAPTCHA
+  // Global variables for reCAPTCHA Enterprise
   window.flsvalidationRecaptchaResponse = null;
-  window.flsvalidationRecaptchaWidgetId = null;
-
-  // Global reCAPTCHA callback functions (must be global for Google's API)
-  window.onRecaptchaSuccess = function(response) {
-    window.flsvalidationRecaptchaResponse = response;
-    if (elements.captchaSubmit) {
-      elements.captchaSubmit.disabled = false;
-      elements.captchaSubmit.textContent = 'Verify & Continue to Checkout';
-    }
-    if (CONFIG.DEBUG_MODE) {
-      console.log('[reCAPTCHA] Verification successful');
-    }
-  };
-
-  window.onRecaptchaError = function() {
-    window.flsvalidationRecaptchaResponse = null;
-    if (elements.captchaSubmit) {
-      elements.captchaSubmit.disabled = true;
-    }
-    console.error('[reCAPTCHA] Verification error');
-  };
-
-  window.onRecaptchaExpired = function() {
-    window.flsvalidationRecaptchaResponse = null;
-    if (elements.captchaSubmit) {
-      elements.captchaSubmit.disabled = true;
-      elements.captchaSubmit.textContent = 'CAPTCHA Expired - Try Again';
-    }
-    console.warn('[reCAPTCHA] Token expired');
-  };
+  const RECAPTCHA_SITE_KEY = '6Lc0n9QrATFkmu2'; // Your Enterprise site key
 
   // Initialize the system
   init();
@@ -494,7 +462,11 @@ document.addEventListener('DOMContentLoaded', function() {
       elements.stickyCheckoutBtn.addEventListener('click', handleCheckoutClick);
     }
 
-    // Real reCAPTCHA events - no need for checkbox listener
+    // reCAPTCHA Enterprise events
+    if (elements.enterpriseVerify) {
+      elements.enterpriseVerify.addEventListener('click', handleEnterpriseVerify);
+    }
+    
     if (elements.captchaSubmit) {
       elements.captchaSubmit.addEventListener('click', handleCaptchaSubmit);
     }
@@ -629,28 +601,7 @@ document.addEventListener('DOMContentLoaded', function() {
     elements.captchaContainer.style.display = 'block';
     elements.captchaSubmit.disabled = true;
     
-    // Initialize Google reCAPTCHA widget if available
-    if (typeof grecaptcha !== 'undefined' && elements.recaptchaElement) {
-      try {
-        // Render the reCAPTCHA widget
-        window.flsvalidationRecaptchaWidgetId = grecaptcha.render(elements.recaptchaElement, {
-          'sitekey': elements.recaptchaElement.getAttribute('data-sitekey'),
-          'callback': 'onRecaptchaSuccess',
-          'error-callback': 'onRecaptchaError',
-          'expired-callback': 'onRecaptchaExpired'
-        });
-        if (CONFIG.DEBUG_MODE) {
-          console.log('[reCAPTCHA] Widget rendered successfully');
-        }
-      } catch (error) {
-        console.error('[reCAPTCHA] Failed to render widget:', error);
-        // Fallback to showing an error message
-        showValidationStatus('error', '❌ reCAPTCHA Error', 
-          'Unable to load reCAPTCHA. Please refresh the page and try again.');
-      }
-    } else {
-      console.warn('[reCAPTCHA] grecaptcha not available or element not found');
-    }
+    // reCAPTCHA Enterprise doesn't need widget rendering - just show the button
   }
 
   function showValidationStatus(type, message, details = '') {
@@ -660,6 +611,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (CONFIG.DEBUG_MODE) {
       console.log('[Cart Validation]', type, message, details);
+    }
+  }
+
+  async function handleEnterpriseVerify() {
+    try {
+      elements.enterpriseVerify.disabled = true;
+      elements.enterpriseVerify.textContent = 'Verifying...';
+      
+      // Execute reCAPTCHA Enterprise
+      if (typeof grecaptcha === 'undefined' || !grecaptcha.enterprise) {
+        throw new Error('reCAPTCHA Enterprise not loaded');
+      }
+      
+      await grecaptcha.enterprise.ready();
+      const token = await grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, {
+        action: 'checkout_validation'
+      });
+      
+      window.flsvalidationRecaptchaResponse = token;
+      
+      if (CONFIG.DEBUG_MODE) {
+        console.log('[reCAPTCHA Enterprise] Token obtained');
+      }
+      
+      // Automatically submit the captcha
+      await handleCaptchaSubmit();
+      
+    } catch (error) {
+      console.error('[reCAPTCHA Enterprise] Error:', error);
+      elements.enterpriseVerify.disabled = false;
+      elements.enterpriseVerify.textContent = 'Retry Verification';
+      showValidationStatus('error', '❌ reCAPTCHA Enterprise Error', 
+        'Unable to complete verification. Please try again.');
     }
   }
 
