@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -61,14 +61,21 @@ export const ipGeolocations = pgTable("ip_geolocations", {
   region: text("region"),
   city: text("city"),
   zipCode: text("zip_code"),
-  latitude: text("latitude"),
-  longitude: text("longitude"),
+  latitude: text("latitude"), // Keep as text for now, store decimal values
+  longitude: text("longitude"), // Keep as text for now, store decimal values
   timezone: text("timezone"),
+  timezoneName: text("timezone_name"),
+  timezoneGmtOffset: integer("timezone_gmt_offset"),
+  currency: text("currency"),
   isp: text("isp"),
+  connectionType: text("connection_type"),
+  organization: text("organization"),
   isVpn: boolean("is_vpn").default(false),
   isProxy: boolean("is_proxy").default(false),
   isTor: boolean("is_tor").default(false),
   threatLevel: text("threat_level"), // 'low', 'medium', 'high'
+  // Store ISP routing data for admin dashboard only (hidden from public)
+  internalIspData: jsonb("internal_isp_data"),
   lastUpdated: timestamp("last_updated").defaultNow().notNull(),
 });
 

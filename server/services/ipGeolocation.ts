@@ -10,11 +10,22 @@ export interface IpGeolocationData {
   latitude?: string;
   longitude?: string;
   timezone?: string;
+  timezone_name?: string;
+  timezone_gmt_offset?: number;
+  currency?: string;
   isp?: string;
+  connection_type?: string;
+  organization?: string;
   is_vpn?: boolean;
   is_proxy?: boolean;
   is_tor?: boolean;
   threat_level?: 'low' | 'medium' | 'high';
+  // Hide ISP routing details from frontend, store in DB only
+  internal_isp_data?: {
+    autonomous_system_number?: string;
+    routing_domain?: string;
+    network_details?: any;
+  };
 }
 
 export interface IpValidationResult {
@@ -31,9 +42,7 @@ export class IpGeolocationService {
   private apiUrl: string = 'https://ipgeolocation.abstractapi.com/v1/';
   
   constructor() {
-    // In production, you would set this via environment variable
-    // For demo purposes, we'll use a mock service
-    this.apiKey = process.env.IP_GEOLOCATION_API_KEY || 'demo-key';
+    this.apiKey = process.env.ABSTRACT_API_IP_GEOLOCATION_KEY || 'demo-key';
   }
 
   async getLocationData(ipAddress: string): Promise<IpGeolocationData> {
@@ -174,14 +183,21 @@ export class IpGeolocationService {
       };
     }
     
-    // Default safe location
+    // Default safe location with coordinates
     return {
       ip,
       country: 'United States',
       country_code: 'US',
       region: 'California',
       city: 'San Francisco',
+      latitude: '37.7749',
+      longitude: '-122.4194',
+      timezone: 'America/Los_Angeles',
+      timezone_name: 'America/Los_Angeles',
+      timezone_gmt_offset: -8,
+      currency: 'USD',
       isp: 'Residential ISP',
+      connection_type: 'Residential',
       is_vpn: false,
       is_proxy: false,
       is_tor: false,
@@ -197,14 +213,28 @@ export class IpGeolocationService {
       region: data.region,
       city: data.city,
       zip_code: data.postal_code,
-      latitude: data.latitude?.toString(),
-      longitude: data.longitude?.toString(),
+      latitude: data.latitude ? data.latitude.toString() : undefined,
+      longitude: data.longitude ? data.longitude.toString() : undefined,
       timezone: data.timezone?.name,
+      timezone_name: data.timezone?.name,
+      timezone_gmt_offset: data.timezone?.gmt_offset,
+      currency: data.currency?.name,
       isp: data.connection?.isp_name,
+      connection_type: data.connection?.connection_type,
+      organization: data.connection?.organization_name,
       is_vpn: data.security?.is_vpn || false,
       is_proxy: data.security?.is_proxy || false,
       is_tor: data.security?.is_tor || false,
-      threat_level: this.calculateThreatLevel(data.security)
+      threat_level: this.calculateThreatLevel(data.security),
+      // Store detailed ISP routing info for backend only (hidden from frontend)
+      internal_isp_data: {
+        autonomous_system_number: data.connection?.autonomous_system_number,
+        routing_domain: data.connection?.routing_domain,
+        network_details: {
+          asn: data.connection?.autonomous_system_number,
+          isp_details: data.connection
+        }
+      }
     };
   }
 
